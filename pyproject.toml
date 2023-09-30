@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cg3d-maya-casc"
+version = "0.8.0"
+authors = [
+  { name="Nathaniel A", email="developer@3dcg.guru" },
+]
+
+description = "Easily bridge data between Maya and Cascadeur with this Maya Module"
+readme = "README.md"
+requires-python = ">=3.4"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+
+dependencies = [
+    "pymel>=1.3",
+    "platformdirs",
+    "cg3d-maya-core",
+    "wing-carrier"
+]
+
+[project.urls]
+"Homepage" = "https://github.com/Nathanieljla/cg3d-maya-casc"
+
+[tool.setuptools.packages.find]
+where = ["src"]
