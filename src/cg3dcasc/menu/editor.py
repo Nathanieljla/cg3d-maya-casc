@@ -1,4 +1,5 @@
 
+DIVIDER = ''
 
 
 def command(*args, **kwargs):

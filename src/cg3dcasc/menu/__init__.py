@@ -4,7 +4,8 @@ PARAMS = {
 }
 
 ORDER = [
-    'editor',
+    'quick_export',
+    'update',
     'send_to',
-    'update'
+    'editor'
 ]

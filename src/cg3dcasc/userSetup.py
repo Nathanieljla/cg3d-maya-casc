@@ -7,5 +7,4 @@ def casc_setup():
     menu_maker.run(menu_namespace='cg3dcasc.menu')
 
 
-
 maya.utils.executeDeferred(casc_setup)
