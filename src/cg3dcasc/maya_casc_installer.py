@@ -741,7 +741,9 @@ class ModuleManager(QThread):
             filename = os.path.join(self.install_root, (self.module_name + '.mod'))
             self.read_module_definitions(filename)
                   
-            self.update_module_definition(filename)            
+            self.update_module_definition(filename)
+            
+        return True
                 
                 
     def install_pymel(self):
@@ -947,6 +949,7 @@ class InstallerUi(QWidget):
 
         self.message_label = QLabel()
         self.message_label.setText(self.launch_message)
+        self.message_label.setStyleSheet('color: white')
         self.message_label.show()
         
         self.movie = QMovie()
@@ -1157,6 +1160,8 @@ class MyInstaller(ModuleManager):
         #build the menu
         import cg3dcasc.userSetup
         cg3dcasc.userSetup.casc_setup()
+        
+        return True
 
     
 def main():
@@ -1176,6 +1181,7 @@ def main():
         RESOURCES = Resources()
         window_name =  manager.module_name.replace("_", " ")
         installer = InstallerUi(window_name, manager, background_color=background_color, company_logo_size=logo_size)
+        installer.message_label.setText("Let's get going!")
         RESOURCES.set_installer(installer)
 
         installer.show()
