@@ -879,9 +879,9 @@ class InstallerUi(QWidget):
                  company_logo_size = [64, 64],
                  launch_message='', 
                  installing_message = 'Installing, please wait ...',
-                 failed_message='Install Failed!',
-                 success_message="Install Completed Successfully!",
-                 post_error_messsage='Install Successful. Clean-up errored.  See output.', 
+                 failed_message='Install Failed!\nSee output.',
+                 success_message="Install Completed\nSuccessfully!",
+                 post_error_messsage='Install Successful.\nClean-up errored.\nSee output.', 
                  *args, **kwargs
                  ):
         
@@ -901,7 +901,7 @@ class InstallerUi(QWidget):
         self.set_default_size(name)
         self.install_button.clicked.connect(self.on_install)
         self.close_button.clicked.connect(self.on_close)
-        #
+        
 
     def set_default_size(self, name):
         self.animated_gif.hide()         
@@ -989,6 +989,7 @@ class InstallerUi(QWidget):
         self.animated_gif.show()
         self.message_label.setText(self.installing_message)
         self.message_label.show()
+        self.repaint()
         
         if self.module_manager.pre_install():
             self.connect(self.module_manager, SIGNAL('finished()'), self.done)
@@ -1040,14 +1041,83 @@ class MyInstaller(ModuleManager):
                 shutil.rmtree(str(child))
             else:
                 child.unlink(missing_ok=True)
+                
+                
+    @staticmethod         
+    def get_registered_path():
+        """Find the install path of cascadeur from the registry"""
+        casc_path = None
+        
+        if platform.platform().lower().startswith('windows'):
+            import winreg
+        else:
+            return None
+        
+        try:
+            access_registry = winreg.ConnectRegistry(None,winreg.HKEY_CLASSES_ROOT)
+            access_key = winreg.OpenKey(access_registry, r"Cascadeur\shell\open\command")
+            casc_path = winreg.QueryValue(access_key, None)
+        except Exception as e:
+            print("Couldn't find the EXE in winreg. Let's look at this case! Error:{}".format(e))
+            
+        return casc_path
+            
 
         
     def pre_install(self):        
         super().pre_install()
+        try:
+            #DON'T PUT THIS IN THE INSTALL(), because install is inside of a thread
+            #and the confirm and file dialog boxes will blow Maya up!
+            
+            #We now need to update the app.settings.json Find the exe path,
+            #if we can't find it, lets ask the user for it
+            exe_path = None #MyInstaller.get_registered_path()
+            print("Cascadeur exe path: {}".format(exe_path))
+            if not exe_path:
+                result = maya.cmds.confirmDialog( title='Help Me find Cascadeur', message='I need your help finding the Cascadeur.exe\n\nAdmin priveleges will be required. Okay?', button=['Yes','No'], defaultButton='Yes', cancelButton='No', dismissString='No' )
+                if result != 'Yes':                
+                    raise Exception("Couldn't locate a valid installation of Cascadeur!")
+                
+                singleFilter = "exe (cascadeur.exe)"
+                exe_path = maya.cmds.fileDialog2(caption ='Locate Cascadeur EXE', fileFilter=singleFilter, dialogStyle=1,fileMode =1)
+                
+                if not exe_path:
+                    raise Exception("Couldn't locate a valid installation of Cascadeur!")
+                else:
+                    exe_path = exe_path[0]
+
+            #Let's edit the json
+            exe = pathlib.Path(exe_path)
+            settings_file: pathlib.Path = exe.parent.joinpath('resources/settings.json')
+            if not settings_file.exists():
+                raise Exception("Couldn't locate a valid settings.json !")
+            
+            if settings_file.exists():
+                settings = open(settings_file)
+                data = json.load(settings)
+                settings.close()
+                
+                if 'cg3dcmds' not in data['Python']['Commands']:
+                    data['Python']['Commands'].append('cg3dcmds')
+    
+                read_state = os.stat(settings_file).st_mode
+                os.chmod(settings_file, stat.S_IWRITE)
+                
+                settings = open(settings_file, 'w')
+                json.dump(data, settings, indent = 4)
+                settings.close()
+        
+                os.chmod(settings_file, read_state)
+                
+        except Exception as e:
+            print(e)
+            return False
+        
+
         #let's frist install platformdirs so we can make a spot for out
         #cascaduer code. Once we determined the path, we'll clear the scripts
-        #folder of all the garbage platformdirs added.
-        
+        #folder of all the garbage platformdirs added.        
         pip_args = [r'--target={0}'.format(self.scripts_path)]
         Commandline.pip_install('platformdirs', pip_args=pip_args)
         
@@ -1080,10 +1150,10 @@ class MyInstaller(ModuleManager):
         Commandline.pip_install('https://github.com/Nathanieljla/cg3d-casc-core/archive/refs/heads/main.zip', pip_args=pip_args)
         Commandline.pip_install('wing-carrier', pip_args=pip_args)     
 
-        #TODO: Clear our scripts dir, now that we're done with the
-        #platformsdir package
         self.clean_folder(self.scripts_path)
         
+        
+        print("Pre install complete")
         return True
     
 
@@ -1135,6 +1205,7 @@ class MyInstaller(ModuleManager):
                 settings.close()
         
                 os.chmod(settings_file, read_state)
+                                
         except Exception as e:
             print("CASCADEUR: Installation failed while moving data to Cascadeur!")
             print(e)
@@ -1146,7 +1217,14 @@ class MyInstaller(ModuleManager):
     
     def post_install(self, install_succeeded):
         #build the mod file
-        super().post_install(install_succeeded)        
+        success = super().post_install(install_succeeded)        
+        
+        if not success:
+            return success
+        
+        if not install_succeeded:
+            #if the install didn't complete then we don't want to do anything else
+            return True
         
         #move the user setup
         scripts_dir = pathlib.Path(self.scripts_path)
