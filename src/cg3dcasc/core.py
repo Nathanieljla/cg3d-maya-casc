@@ -243,13 +243,6 @@ _ACTIVE_USER_DATA = None
 class QRigData(cg3dguru.udata.BaseData):
     """A block of data to help convert a HIK character to Cascaduer's quick rig"""
 
-    #@classmethod
-    #def get_class_version(cls):
-        #return (0, 1, 0)
-    
-    #@staticmethod
-    #def pre_update_version(*args, **kwargs):
-        #return True
 
     @staticmethod
     def get_attributes():
@@ -319,7 +312,6 @@ def _get_input_joint(key):
 
 
 def _get_joint_struct(key):    
-    #TODO: Default structure...Should this be written to disc if the structure is Null?
     joint_struct = {
         'Bone name': HIK_ATTRS[key],
         'Joint name': '',
@@ -700,41 +692,25 @@ def export(export_set=None, export_rig=False, cmd_string=''):
         
 
 def update_animations():
-    export(cmd_string=u"import cg3dguru.maya; cg3dguru.maya.update_animations()")
-    #casc = wingcarrier.pigeons.CascadeurPigeon()
-    #cmd = u"import cg3dguru.maya; cg3dguru.maya.update_animations()"
-    #casc.send_python_command(cmd)
+    export(cmd_string=u"import cg3dmaya; cg3dmaya.update_animations()")
     
     
 def update_models():
-    export(cmd_string=u"import cg3dguru.maya; cg3dguru.maya.update_models()")
-    #casc = wingcarrier.pigeons.CascadeurPigeon()
-    #cmd = u"import cg3dguru.maya; cg3dguru.maya.update_models()"
-    #casc.send_python_command(cmd)
+    export(cmd_string=u"import cg3dmaya; cg3dmaya.update_models()")
     
     
 def export_scene(new_scene):
-    cmd = u"import cg3dguru.maya; cg3dguru.maya.import_scene({})".format(new_scene)
+    cmd = u"import cg3dmaya; cg3dmaya.import_scene({})".format(new_scene)
     export(cmd_string=cmd)
-    #casc = wingcarrier.pigeons.CascadeurPigeon()
-    #cmd = u"import cg3dguru.maya; cg3dguru.maya.import_scene({})".format(new_scene)
-    #casc.send_python_command(cmd)
     
 
 def export_rig(new_scene, export_set):
-    cmd = u"import cg3dguru.maya; cg3dguru.maya.import_scene({})".format(new_scene)
+    cmd = u"import cg3dmaya; cg3dmaya.import_scene({})".format(new_scene)
     export(export_set, True, cmd_string=cmd)
-    #casc = wingcarrier.pigeons.CascadeurPigeon()
-    #cmd = u"import cg3dguru.maya; cg3dguru.maya.smart_import({})".format(new_scene)
-    #casc.send_python_command(cmd)
-    
     
 def smart_export():
-    cmd = u"import cg3dguru.maya; cg3dguru.maya.smart_import({})".format(False)
+    cmd = u"import cg3dmaya; cg3dmaya.smart_import({})".format(False)
     export(cmd_string=cmd)
-    #casc = wingcarrier.pigeons.CascadeurPigeon()
-    #cmd = u"import cg3dguru.maya; cg3dguru.maya.smart_import({})".format(False)
-    #casc.send_python_command(cmd)    
 
 
 def get_import_files():
