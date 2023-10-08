@@ -1,3 +1,4 @@
+import json
 import typing
 import tempfile
 import os
@@ -83,6 +84,44 @@ def _get_modified_filter(existing_data, qrig_path, import_filter: fbx.FbxFilterT
     
     
     
+def _load_textures(scene):
+    def mod(scene):
+        temp_dir = pathlib.Path(os.path.join(tempfile.gettempdir(), 'mayacasc'))
+        #load any textures
+        texture_path: pathlib.Path = temp_dir.joinpath('texture_info.json')
+        if texture_path.exists():
+            texture_data = open(texture_path)
+            texture_mapping = json.load(texture_data)
+            texture_data.close()
+            
+            names = list(texture_mapping.keys())
+            if not names:
+                return
+            
+            objs = scene.get_scene_objects(names=names)
+            for obj in objs:
+                if not obj.has_behaviour('MeshObject'):
+                    print("Can't find MeshObject for {}".format(obj.name))
+                    continue
+                                
+                filename = texture_mapping[obj.name]
+                if not obj.has_behaviour('TextureContainer'):
+                    obj.add_behaviour('TextureContainer')
+                    
+                data = obj.TextureContainer.texture_paths.get_by_name('texture 0')
+                if data:
+                    data[0].set(filename)
+                else:
+                    obj.TextureContainer.start_frame.create_data('Start frame', csc.model.DataMode.Static, 0, group_name='maya_textures')
+                    data = obj.create_data('texture 0', csc.model.DataMode.Static, filename, group_name='maya_textures')
+                    obj.TextureContainer.texture_paths.add(data.id)
+                    
+                obj.MeshObject.textures.set(obj.TextureContainer)
+                    
+    scene.edit("Load Textures", mod)
+    
+    
+    
 def _import_maya(new_scene, import_filter: fbx.FbxFilterType):
     if new_scene:
         scene = cg3dguru.core.new_scene()
@@ -110,7 +149,7 @@ def _import_maya(new_scene, import_filter: fbx.FbxFilterType):
             
         files[name][ext.lower()] = str(child)
         
-        
+    import_rig = ''
     for key, item in files.items():
         fbx_path = ''
         qrig_path = ''
@@ -118,6 +157,14 @@ def _import_maya(new_scene, import_filter: fbx.FbxFilterType):
             fbx_path = item['fbx']
         if 'qrigcasc' in item:
             qrig_path = item['qrigcasc']
+            
+        if not fbx_path and not qrig_path:
+            #we'll skip files that don't match the name.id format
+            #the texture file is an example of one of these files
+            continue
+        
+        if qrig_path:
+            import_rig = qrig_path
             
         set_name, maya_id = key.split('.') 
         existing_data = _get_object_by_id(pre_import_roots, maya_id)
@@ -137,10 +184,49 @@ def _import_maya(new_scene, import_filter: fbx.FbxFilterType):
             scene.edit('Import maya data', _create_data, set_name, maya_id, new_roots)
         else:
             scene.dom_scene.info("Updated existing data")
+            
+            
+    _load_textures(scene)
+            
+            
+    ##load any textures
+    #texture_path: pathlib.Path = temp_dir.joinpath('texture_info.json')
+    #if texture_path.exists():
+        #texture_data = open(texture_path)
+        #texture_mapping = json.load(texture_data)
+        #texture_data.close()
+        
+        #names = list(texture_mapping.keys())
+        #print(names)
+        #objs = scene.get_scene_objects(names=names)
+        #print("Found {}".format(objs))
+        #for obj in objs:
+            #print(obj.name)
+            #filename = texture_mapping[obj.name]
+            #if not obj.has_behaviour('TextureContainer'):
+                #obj.add_behaviour('TextureContainer')
                 
-        #rig generation has to come last, so all the other automation can complete properly
-        if qrig_path:
-            _import_maya_qrig_file(qrig_path)
+            #data = obj.TextureContainer.texture_paths.get_by_name('texture 0')
+            #if data:
+                #data[0].set(filename)
+            #else:
+                #obj.TextureContainer.start_frame.create_data('Start frame', csc.model.DataMode.Static, 0) #, group_name='maya_textures')
+                #data = obj.create_data('texture 0', csc.model.DataMode.Static, filename) #, group_name='maya_textures')
+                #obj.TextureContainer.texture_paths.add(data.id)
+            
+                
+    #rig generation has to come last, so all the other automation can complete properly
+    #This is outside of the main file loop, because for now we can only import one
+    #rig file per import actions, so the var should be initialized, and I need  do this after all
+    #the textures have been assigned.  Once I can import rigs via script (without ui interaction)
+    #this can stay inside the file loop and we can move the texture loading to the end.
+    if import_rig:
+        print("attempting rig import")
+        _import_maya_qrig_file(import_rig)
+            
+    
+
+
             
             
             
@@ -158,6 +244,10 @@ def import_scene(new_scene):
     
 def smart_import(new_scene):
     _import_maya(new_scene, fbx.FbxFilterType.AUTO)
+    
+def update_textures():
+    scene = cg3dguru.core.get_current_scene()
+    _load_textures(scene)
     
     
 
@@ -236,20 +326,13 @@ def _export(cmd_string):
  
         
         
-def export_maya_fbx_animation():
-    cmd = "import cg3dmaya.cascadeur.core; cg3dmaya.cascadeur.core.import_fbx()"
+def export_maya_animation():
+    cmd = "import cg3dcasc.core; cg3dcasc.core.import_fbx()"
     _export(cmd)
     
     
 def run(*args, **kwargs):
-    export_maya_fbx_animation()
-    
-  
-print('core imported')  
-    
-#if __name__ == '__main__':
-    #print("Importing")
-    #import_fbx_file()
+    export_maya_animation()
     
 
 

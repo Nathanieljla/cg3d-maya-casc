@@ -275,7 +275,8 @@ class CascExportData(cg3dguru.udata.BaseData):
     @staticmethod
     def get_attributes():
         attrs = [
-            cg3dguru.udata.create_attr('cscDataId', 'string'),    
+            cg3dguru.udata.create_attr('cscDataId', 'string'),
+            cg3dguru.udata.create_attr('dynamicSet', 'bool')
         ]
         
         return attrs
@@ -285,6 +286,7 @@ class CascExportData(cg3dguru.udata.BaseData):
         unique_id = uuid.uuid1()
         data.cscDataId.set(str(unique_id))
         data.cscDataId.lock()
+        data.dynamicSet.set(1)
 
 
 
@@ -568,6 +570,9 @@ def export_qrig_file(character_node, qrig_data, filename):
 
 
 def node_type_exportable(node):
+    """See if the node set to export is a valid node type"""
+    #This is used by the editor, so don't remove this function
+    #just because it's not being used in the core.py
     if isinstance(node, pm.nodetypes.Joint) \
        or isinstance(node, pm.nodetypes.Mesh) \
      or isinstance(node, pm.nodetypes.SkinCluster) \
@@ -577,8 +582,9 @@ def node_type_exportable(node):
     return False
 
 
-
-def _export_data(export_data, export_folder: pathlib.Path, export_rig: bool):
+def get_character_node(export_data):
+    """Return any HIK character node associated with the export_data"""
+    
     qrig_data = QRigData.get_data(export_data.node())
     character_node = None
     if qrig_data:
@@ -588,6 +594,26 @@ def _export_data(export_data, export_folder: pathlib.Path, export_rig: bool):
         else:
             character_node = inputs[0]
             
+    return character_node
+
+
+
+def get_exportable_content(export_data):
+    """Return a list of elements to export based on the object set elements"""
+    
+    if not export_data.dynamicSet.get():
+        return set(export_data.node().flattened())
+    
+    #qrig_data = QRigData.get_data(export_data.node())
+    #character_node = None
+    #if qrig_data:
+        #inputs = qrig_data.characterNode.inputs()
+        #if not qrig_data.characterNode.inputs():
+            #pm.error("ERROR: cascadeur.core.export: qrig_data wasn't provided with HIK Character node")
+        #else:
+            #character_node = inputs[0]
+            
+    character_node = get_character_node(export_data)
     joints = set()
     meshes = set()
     skin_clusters = set()
@@ -629,11 +655,71 @@ def _export_data(export_data, export_folder: pathlib.Path, export_rig: bool):
     add_transform_roots(joints, root_transforms)
     add_transform_roots(meshes, root_transforms)
     add_transform_roots(transforms, root_transforms)
+    
+    return root_transforms
+    
+    
 
+
+
+def _export_data(export_data, export_folder: pathlib.Path, export_rig: bool):
+    #qrig_data = QRigData.get_data(export_data.node())
+    #character_node = None
+    #if qrig_data:
+        #inputs = qrig_data.characterNode.inputs()
+        #if not qrig_data.characterNode.inputs():
+            #pm.error("ERROR: cascadeur.core.export: qrig_data wasn't provided with HIK Character node")
+        #else:
+            #character_node = inputs[0]
+            
+    #joints = set()
+    #meshes = set()
+    #skin_clusters = set()
+    #transforms = set()
+
+    ##organize our exportExtra nodes into types
+    #for node in export_data.node().flattened():
+        #if isinstance(node, pm.nodetypes.Joint):
+            #joints.add(node)
+        #elif isinstance(node, pm.nodetypes.Mesh):
+            #meshes.add(node)
+        #elif isinstance(node, pm.nodetypes.SkinCluster):
+            #skin_clusters.add(node)
+        #elif isinstance(node, pm.nodetypes.Transform):
+            #transforms.add(node)
+        #else:
+            #pm.warning('Cascaduer Export: Ignoring object {}'.format(node.name()))
+
+    ##We need to combine all joints and skinned meshes into a set of
+    ##skin_clusters, which can then be used to build a complete list
+    ##of joints and meshes that need exporting.
+    #if character_node:
+        #hik_joints = get_hik_joints(character_node)
+        #joints.update(hik_joints)
+
+    #mesh_clusters = get_mesh_skin_clusters(meshes)
+    #skin_clusters.update(mesh_clusters)
+
+    #joint_skin_clusters = get_joint_skin_clusters(joints)
+    #skin_clusters.update(joint_skin_clusters)
+
+    #skinned_joints = get_skin_cluster_joints(skin_clusters)
+    #joints.update(skinned_joints)
+
+    #skinned_meshes = get_skin_cluster_meshes(skin_clusters)
+    #meshes.update(skinned_meshes)
+
+    #root_transforms = set()
+    #add_transform_roots(joints, root_transforms)
+    #add_transform_roots(meshes, root_transforms)
+    #add_transform_roots(transforms, root_transforms)
+    
+    qrig_data = QRigData.get_data(export_data.node())
+    character_node = get_character_node(export_data)
+    root_transforms =  get_exportable_content(export_data)
     user_selection = pm.ls(sl=True)
     pm.select(list(root_transforms), replace=True)
     
-
     file_id = export_data.cscDataId.get()
     node_name = export_data.node().name().split(':')[-1]
     filename = '{}.{}.fbx'.format(node_name, file_id)
@@ -648,6 +734,9 @@ def _export_data(export_data, export_folder: pathlib.Path, export_rig: bool):
         filename = '{}.{}.qrigcasc'.format(node_name, file_id)
         qrig_file_path = export_folder.joinpath(filename)
         export_qrig_file(character_node, qrig_data, qrig_file_path)
+        
+        
+    return root_transforms
 
 
 
@@ -659,7 +748,41 @@ def _build_default_set():
 
 
 
-def export(export_set=None, export_rig=False, cmd_string=''):
+def get_textures(objs):
+    materials = {}
+    
+    shapes = pm.listRelatives(objs, s=True)
+    for shape in shapes:
+        sgs = pm.listConnections(shape, type='shadingEngine' )
+        for sg in sgs:
+            shaders = pm.listConnections("%s.surfaceShader" % sg, s=True)
+            for shader in shaders:
+                color_attr = None
+                if hasattr(shader, 'color'):
+                    color_attr = getattr(shader, 'color')
+                elif hasattr(shader, 'diffuse'):
+                    color_attr = getattr(shader, 'diffuse')
+                elif hasattr(shader, 'baseColor'):
+                    color_attr = getattr(shader, 'baseColor')
+                    
+                if not color_attr:
+                    continue
+                
+                color_input = pm.listConnections(color_attr, s=True, d=False)
+                if not color_input:
+                    continue
+                
+                color_input = color_input[0]
+                if pm.nodeType(color_input) == 'file':
+                    filepath = color_input.fileTextureName.get()
+                    if filepath:
+                        materials[shape.getParent().name()] = filepath
+                        
+    return materials
+
+
+
+def export(export_set=None, export_rig=False, cmd_string='', textures=True):
     #remove any previous exports
     temp_dir = pathlib.Path(os.path.join(tempfile.gettempdir(), 'mayacasc'))
     print('Cascaduer Export Location {}'.format(temp_dir))
@@ -682,9 +805,25 @@ def export(export_set=None, export_rig=False, cmd_string=''):
             #There's nothing to export in the scene, so let's build a default set.
             export_nodes = [_build_default_set()]
               
+    export_roots = set()
     for node in export_nodes:
-        _export_data(node, temp_dir, export_rig)
+        roots = _export_data(node, temp_dir, export_rig)
+        export_roots.update(roots)
         
+    #Let's export our texture infor
+    texture_mappings = {}
+    if textures:
+        print("Exporting textures")
+        for root in export_roots:
+            branch = pm.listRelatives(root, allDescendents=True)
+            results = get_textures(branch)
+            texture_mappings.update(results)
+            
+        print(texture_mappings)
+        texture_file = open(temp_dir.joinpath('texture_info.json'), 'w')
+        formatted_str = json.dumps(texture_mappings, indent=4)
+        texture_file.write(formatted_str)
+        texture_file.close()
 
     if cmd_string:
         casc = wingcarrier.pigeons.CascadeurPigeon()
@@ -692,7 +831,7 @@ def export(export_set=None, export_rig=False, cmd_string=''):
         
 
 def update_animations():
-    export(cmd_string=u"import cg3dmaya; cg3dmaya.update_animations()")
+    export(cmd_string=u"import cg3dmaya; cg3dmaya.update_animations()", textures=False)
     
     
 def update_models():
@@ -751,7 +890,7 @@ def import_fbx():
 
             matching_export = None
             for node in existing_exports:
-                if node.maya_id.get() == maya_id:
+                if node.cscDataId.get() == maya_id:
                     matching_export = node
                     break
 
@@ -773,7 +912,9 @@ def import_fbx():
             print("Can't import rigs at the moment")
             
         
+    
         
 def run():
-    import_fbx()
+    get_textures(pm.ls(sl=True))
+    #import_fbx()
     

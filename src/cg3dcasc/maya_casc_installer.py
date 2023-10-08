@@ -1201,7 +1201,8 @@ class MyInstaller(ModuleManager):
                 os.chmod(settings_file, stat.S_IWRITE)
                 
                 settings = open(settings_file, 'w')
-                json.dump(data, settings, indent = 4)
+                formatted_json = json.dumps(data, indent = 4)
+                settings.write(formatted_json)
                 settings.close()
         
                 os.chmod(settings_file, read_state)

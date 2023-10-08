@@ -80,6 +80,7 @@ class HikExportEditor(cg3dguru.ui.Window):
         self.ui.clear_right_weapon.pressed.connect(lambda : self.on_clear_weapon(self.ui.right_weapon_node))
         self.ui.add_extras.pressed.connect(self.on_add_selection)
         self.ui.remove_extras.pressed.connect(self.on_remove_selection)
+        self.ui.dynamic_set.stateChanged.connect(self.on_dynamic_changed)
         self.ui.align_pelvis.stateChanged.connect(self.on_align_pelvis)
         self.ui.create_layers.stateChanged.connect(self.on_create_layers)
         self.ui.rig_current_button.pressed.connect(lambda: self.on_export(False))
@@ -150,6 +151,16 @@ class HikExportEditor(cg3dguru.ui.Window):
             return
         
         cg3dcasc.export_rig(new_scene, self.export_data.node()) #, qrig_data=self.rig_data, character_node=self.active_selection)
+        
+        
+    def on_dynamic_changed(self, *args):
+        if self.loading_data or not self.active_selection or self.selection_changing:
+            return
+        
+        if not self.export_data:
+            return
+        
+        self.export_data.dynamicSet.set(args[0] != 0)
 
         
     def on_align_pelvis(self, *args):
@@ -384,6 +395,7 @@ class HikExportEditor(cg3dguru.ui.Window):
 
         names.sort()
         self.ui.extras_list.addItems(names)
+        self.ui.dynamic_set.setChecked(self.export_data.dynamicSet.get())
         
 
     def _init_weapon_nodes(self):

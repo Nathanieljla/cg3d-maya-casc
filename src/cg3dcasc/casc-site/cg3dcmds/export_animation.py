@@ -4,4 +4,4 @@ def command_name():
 
 def run(scene):
     import cg3dmaya
-    cg3dmaya.export_animation()
+    cg3dmaya.export_maya_animation()
