@@ -599,20 +599,20 @@ def get_character_node(export_data):
 
 
 def get_exportable_content(export_data):
-    """Return a list of elements to export based on the object set elements"""
+    """Return a list of objects to export based on the ObjectSet elements
+    
+    When the CscExportData.dynamicSet is False then on the objects that are
+    part of the ObjectSet will be returned.
+    
+    When the CscExportData.dynamicSet is True, then the function will look
+    for any joints or meshes in the list and find their associated
+    skinClusters. Then use these skinClusters to find a list of meshes and
+    joints to include for export.    
+    """
     
     if not export_data.dynamicSet.get():
         return set(export_data.node().flattened())
-    
-    #qrig_data = QRigData.get_data(export_data.node())
-    #character_node = None
-    #if qrig_data:
-        #inputs = qrig_data.characterNode.inputs()
-        #if not qrig_data.characterNode.inputs():
-            #pm.error("ERROR: cascadeur.core.export: qrig_data wasn't provided with HIK Character node")
-        #else:
-            #character_node = inputs[0]
-            
+                
     character_node = get_character_node(export_data)
     joints = set()
     meshes = set()
@@ -660,77 +660,29 @@ def get_exportable_content(export_data):
     
     
 
-
-
-def _export_data(export_data, export_folder: pathlib.Path, export_rig: bool):
-    #qrig_data = QRigData.get_data(export_data.node())
-    #character_node = None
-    #if qrig_data:
-        #inputs = qrig_data.characterNode.inputs()
-        #if not qrig_data.characterNode.inputs():
-            #pm.error("ERROR: cascadeur.core.export: qrig_data wasn't provided with HIK Character node")
-        #else:
-            #character_node = inputs[0]
-            
-    #joints = set()
-    #meshes = set()
-    #skin_clusters = set()
-    #transforms = set()
-
-    ##organize our exportExtra nodes into types
-    #for node in export_data.node().flattened():
-        #if isinstance(node, pm.nodetypes.Joint):
-            #joints.add(node)
-        #elif isinstance(node, pm.nodetypes.Mesh):
-            #meshes.add(node)
-        #elif isinstance(node, pm.nodetypes.SkinCluster):
-            #skin_clusters.add(node)
-        #elif isinstance(node, pm.nodetypes.Transform):
-            #transforms.add(node)
-        #else:
-            #pm.warning('Cascaduer Export: Ignoring object {}'.format(node.name()))
-
-    ##We need to combine all joints and skinned meshes into a set of
-    ##skin_clusters, which can then be used to build a complete list
-    ##of joints and meshes that need exporting.
-    #if character_node:
-        #hik_joints = get_hik_joints(character_node)
-        #joints.update(hik_joints)
-
-    #mesh_clusters = get_mesh_skin_clusters(meshes)
-    #skin_clusters.update(mesh_clusters)
-
-    #joint_skin_clusters = get_joint_skin_clusters(joints)
-    #skin_clusters.update(joint_skin_clusters)
-
-    #skinned_joints = get_skin_cluster_joints(skin_clusters)
-    #joints.update(skinned_joints)
-
-    #skinned_meshes = get_skin_cluster_meshes(skin_clusters)
-    #meshes.update(skinned_meshes)
-
-    #root_transforms = set()
-    #add_transform_roots(joints, root_transforms)
-    #add_transform_roots(meshes, root_transforms)
-    #add_transform_roots(transforms, root_transforms)
-    
+def _export_data(export_data, export_folder: pathlib.Path, export_rig: bool, export_fbx: bool):    
+    #When export_fbx and export_rig are both false
+    #then this function is still useful as it will
+    #as it still returns a list of exportable_content
     qrig_data = QRigData.get_data(export_data.node())
     character_node = get_character_node(export_data)
     root_transforms =  get_exportable_content(export_data)
-    user_selection = pm.ls(sl=True)
-    pm.select(list(root_transforms), replace=True)
     
-    file_id = export_data.cscDataId.get()
-    node_name = export_data.node().name().split(':')[-1]
-    filename = '{}.{}.fbx'.format(node_name, file_id)
-    fbx_file_path = export_folder.joinpath(filename)
-    print('FBX file: {}'.format(fbx_file_path))
-    cg3dguru.animation.fbx.export(filename = fbx_file_path)
-    
-    pm.select(user_selection, replace=True)
+    if export_fbx:
+        user_selection = pm.ls(sl=True)
+        pm.select(list(root_transforms), replace=True)
+        
+        file_id = export_data.cscDataId.get()
+        node_name = export_data.node().name().split(':')[-1]
+        filename = '{}.{}.fbx'.format(node_name, file_id)
+        fbx_file_path = export_folder.joinpath(filename)
+        print('FBX file: {}'.format(fbx_file_path))
+        cg3dguru.animation.fbx.export(filename = fbx_file_path)
+        
+        pm.select(user_selection, replace=True)
 
-    qrig_file_path = ''
     if export_rig and character_node:
+        qrig_file_path = ''
         filename = '{}.{}.qrigcasc'.format(node_name, file_id)
         qrig_file_path = export_folder.joinpath(filename)
         export_qrig_file(character_node, qrig_data, qrig_file_path)
@@ -741,9 +693,24 @@ def _export_data(export_data, export_folder: pathlib.Path, export_rig: bool):
 
 
 def _build_default_set():
-    export_node, data = CascExportData.create_node(nodeType='objectSet')
-    export_node.addMembers(pm.ls(assemblies=True))
+    exportables = []
+    selection = pm.ls(sl=True)
+    if selection:
+        exportables = selection
+    else:
+        assemblies = set(pm.ls(assemblies=True))
+        cameras = set(pm.ls(type='camera'))
+        for c in cameras:
+            #camera's are shape data, so we need to get the tranform
+            assemblies.discard(c.getParent())
+            
+        exportables = assemblies
+        
+    export_node, data = CascExportData.create_node(nodeType='objectSet')    
+    export_node.addMembers(exportables)
     pm.rename(export_node, 'CACS_EXPORT')
+    pm.select(selection, replace=True)
+    
     return export_node
 
 
@@ -782,7 +749,7 @@ def get_textures(objs):
 
 
 
-def export(export_set=None, export_rig=False, cmd_string='', textures=True):
+def export(export_set=None, export_rig=False, cmd_string='', textures=True, only_textures=False):
     #remove any previous exports
     temp_dir = pathlib.Path(os.path.join(tempfile.gettempdir(), 'mayacasc'))
     print('Cascaduer Export Location {}'.format(temp_dir))
@@ -807,12 +774,12 @@ def export(export_set=None, export_rig=False, cmd_string='', textures=True):
               
     export_roots = set()
     for node in export_nodes:
-        roots = _export_data(node, temp_dir, export_rig)
+        roots = _export_data(node, temp_dir, export_rig, not only_textures)
         export_roots.update(roots)
         
     #Let's export our texture infor
     texture_mappings = {}
-    if textures:
+    if textures or only_textures:
         print("Exporting textures")
         for root in export_roots:
             branch = pm.listRelatives(root, allDescendents=True)
@@ -836,6 +803,10 @@ def update_animations():
     
 def update_models():
     export(cmd_string=u"import cg3dmaya; cg3dmaya.update_models()")
+    
+    
+def update_textures():
+    export(cmd_string=u"import cg3dmaya; cg3dmaya.update_textures()", only_textures=True)    
     
     
 def export_scene(new_scene):
@@ -915,6 +886,7 @@ def import_fbx():
     
         
 def run():
-    get_textures(pm.ls(sl=True))
+    pass
+    #get_textures(pm.ls(sl=True))
     #import_fbx()
     

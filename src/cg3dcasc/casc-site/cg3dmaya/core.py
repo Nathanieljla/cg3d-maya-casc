@@ -245,6 +245,7 @@ def import_scene(new_scene):
 def smart_import(new_scene):
     _import_maya(new_scene, fbx.FbxFilterType.AUTO)
     
+    
 def update_textures():
     scene = cg3dguru.core.get_current_scene()
     _load_textures(scene)
