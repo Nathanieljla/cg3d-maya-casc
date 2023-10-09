@@ -882,9 +882,8 @@ def import_fbx():
         if qrig_path:
             print("Can't import rigs at the moment")
             
-        
-    
-        
+            
+            
 def run():
     pass
     #get_textures(pm.ls(sl=True))

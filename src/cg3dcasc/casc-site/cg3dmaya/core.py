@@ -9,8 +9,8 @@ import csc
 import rig_mode.on as rm_on
 import rig_mode.off as rm_off
 
-import cg3dguru.core
-import cg3dguru.core.general.fbx as fbx
+import cg3dguru
+import cg3dguru.general.fbx as fbx
 
 
 MAYA_BEHAVIOUR_NAME = 'Maya Data'
@@ -124,9 +124,9 @@ def _load_textures(scene):
     
 def _import_maya(new_scene, import_filter: fbx.FbxFilterType):
     if new_scene:
-        scene = cg3dguru.core.new_scene()
+        scene = cg3dguru.new_scene()
     else:
-        scene = cg3dguru.core.get_current_scene()
+        scene = cg3dguru.get_current_scene()
 
     scene.dom_scene.info("Importing Maya Data")
     temp_dir = pathlib.Path(os.path.join(tempfile.gettempdir(), 'mayacasc'))
@@ -187,33 +187,7 @@ def _import_maya(new_scene, import_filter: fbx.FbxFilterType):
             
             
     _load_textures(scene)
-            
-            
-    ##load any textures
-    #texture_path: pathlib.Path = temp_dir.joinpath('texture_info.json')
-    #if texture_path.exists():
-        #texture_data = open(texture_path)
-        #texture_mapping = json.load(texture_data)
-        #texture_data.close()
-        
-        #names = list(texture_mapping.keys())
-        #print(names)
-        #objs = scene.get_scene_objects(names=names)
-        #print("Found {}".format(objs))
-        #for obj in objs:
-            #print(obj.name)
-            #filename = texture_mapping[obj.name]
-            #if not obj.has_behaviour('TextureContainer'):
-                #obj.add_behaviour('TextureContainer')
-                
-            #data = obj.TextureContainer.texture_paths.get_by_name('texture 0')
-            #if data:
-                #data[0].set(filename)
-            #else:
-                #obj.TextureContainer.start_frame.create_data('Start frame', csc.model.DataMode.Static, 0) #, group_name='maya_textures')
-                #data = obj.create_data('texture 0', csc.model.DataMode.Static, filename) #, group_name='maya_textures')
-                #obj.TextureContainer.texture_paths.add(data.id)
-            
+              
                 
     #rig generation has to come last, so all the other automation can complete properly
     #This is outside of the main file loop, because for now we can only import one
@@ -224,11 +198,7 @@ def _import_maya(new_scene, import_filter: fbx.FbxFilterType):
         print("attempting rig import")
         _import_maya_qrig_file(import_rig)
             
-    
-
-
-            
-            
+     
             
 def update_models():
     _import_maya(False, fbx.FbxFilterType.MODEL)
@@ -247,7 +217,7 @@ def smart_import(new_scene):
     
     
 def update_textures():
-    scene = cg3dguru.core.get_current_scene()
+    scene = cg3dguru.get_current_scene()
     _load_textures(scene)
     
     
@@ -286,7 +256,7 @@ def _export(cmd_string):
     for child in temp_dir.iterdir():
         child.unlink(missing_ok=True)
         
-    scene = cg3dguru.core.get_current_scene()
+    scene = cg3dguru.get_current_scene()
     
     #See if we have an export set selected
     selected = scene.get_scene_objects(selected=True)
