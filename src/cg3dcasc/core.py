@@ -15,6 +15,14 @@ import cg3dguru.udata
 import cg3dguru.animation.fbx
 import cg3dguru.utils
 
+
+
+class SpineException(Exception):
+    """Thrown when an export is attempted without an upper spine bone defined"""
+    pass
+
+
+
 #https://forums.autodesk.com/t5/maya-programming/python-hik/td-p/4262564
 #https://mayastation.typepad.com/maya-station/2011/04/maya-2012-hik-menus-and-mel-commands-part-1.html
 #https://github.com/bungnoid/glTools/blob/master/utils/hik.py
@@ -121,25 +129,25 @@ HIK_ATTRS = {
     'LeftArmRoll': None, #this isn't in the HIK UI
     'LeftForeArmRoll': None, #this isn't in the HIK UI
     'LeafLeftUpLegRoll1': 'thigh_l',
-    'LeafLeftUpLegRoll2': None,
-    'LeafLeftUpLegRoll3': None,
-    'LeafLeftUpLegRoll4': None,
-    'LeafLeftUpLegRoll5': None, 
+    'LeafLeftUpLegRoll2': 'thigh_l', #new in 2023.2
+    'LeafLeftUpLegRoll3': 'thigh_l', #new in 2023.2
+    'LeafLeftUpLegRoll4': 'thigh_l', #new in 2023.2
+    'LeafLeftUpLegRoll5': 'thigh_l', #new in 2023.2
     'LeafLeftLegRoll1': 'calf_l',
-    'LeafLeftLegRoll2': None,
-    'LeafLeftLegRoll3': None,
-    'LeafLeftLegRoll4': None,
-    'LeafLeftLegRoll5': None, 
+    'LeafLeftLegRoll2': 'calf_l', #new in 2023.2
+    'LeafLeftLegRoll3': 'calf_l', #new in 2023.2
+    'LeafLeftLegRoll4': 'calf_l', #new in 2023.2
+    'LeafLeftLegRoll5': 'calf_l', #new in 2023.2
     'LeafLeftArmRoll1': 'arm_l',
-    'LeafLeftArmRoll2': None,
-    'LeafLeftArmRoll3': None,
-    'LeafLeftArmRoll4': None,
-    'LeafLeftArmRoll5': None, 
+    'LeafLeftArmRoll2': 'arm_l', #new in 2023.2
+    'LeafLeftArmRoll3': 'arm_l', #new in 2023.2
+    'LeafLeftArmRoll4': 'arm_l', #new in 2023.2
+    'LeafLeftArmRoll5': 'arm_l', #new in 2023.2
     'LeafLeftForeArmRoll1': 'forearm_l',
-    'LeafLeftForeArmRoll2': None,
-    'LeafLeftForeArmRoll3': None,
-    'LeafLeftForeArmRoll4': None,
-    'LeafLeftForeArmRoll5': None,
+    'LeafLeftForeArmRoll2': 'forearm_l', #new in 2023.2
+    'LeafLeftForeArmRoll3': 'forearm_l', #new in 2023.2
+    'LeafLeftForeArmRoll4': 'forearm_l', #new in 2023.2
+    'LeafLeftForeArmRoll5': 'forearm_l', #new in 2023.2
     'RightUpLeg': 'thigh_r',
     'RightLeg': 'calf_r',
     'RightFoot': 'foot_r',
@@ -215,33 +223,128 @@ HIK_ATTRS = {
     'RightArmRoll': None, #this isn't in the HIK UI
     'RightForeArmRoll': None, #this isn't in the HIK UI
     'LeafRightUpLegRoll1': 'thigh_r',
-    'LeafRightUpLegRoll2': None,
-    'LeafRightUpLegRoll3': None,
-    'LeafRightUpLegRoll4': None,
-    'LeafRightUpLegRoll5': None, 
+    'LeafRightUpLegRoll2': 'thigh_r', #new in 2023.2
+    'LeafRightUpLegRoll3': 'thigh_r', #new in 2023.2
+    'LeafRightUpLegRoll4': 'thigh_r', #new in 2023.2
+    'LeafRightUpLegRoll5': 'thigh_r', #new in 2023.2 
     'LeafRightLegRoll1': 'calf_r',
-    'LeafRightLegRoll2': None,
-    'LeafRightLegRoll3': None,
-    'LeafRightLegRoll4': None,
-    'LeafRightLegRoll5': None, 
+    'LeafRightLegRoll2': 'calf_r', #new in 2023.2
+    'LeafRightLegRoll3': 'calf_r', #new in 2023.2
+    'LeafRightLegRoll4': 'calf_r', #new in 2023.2
+    'LeafRightLegRoll5': 'calf_r', #new in 2023.2 
     'LeafRightArmRoll1': 'arm_r',
-    'LeafRightArmRoll2': None,
-    'LeafRightArmRoll3': None,
-    'LeafRightArmRoll4': None,
-    'LeafRightArmRoll5': None, 
+    'LeafRightArmRoll2': 'arm_r', #new in 2023.2
+    'LeafRightArmRoll3': 'arm_r', #new in 2023.2
+    'LeafRightArmRoll4': 'arm_r', #new in 2023.2
+    'LeafRightArmRoll5': 'arm_r', #new in 2023.2 
     'LeafRightForeArmRoll1': 'forearm_r',
-    'LeafRightForeArmRoll2': None,
-    'LeafRightForeArmRoll3': None,
-    'LeafRightForeArmRoll4': None,
-    'LeafRightForeArmRoll5': None,
+    'LeafRightForeArmRoll2': 'forearm_r', #new in 2023.2
+    'LeafRightForeArmRoll3': 'forearm_r', #new in 2023.2
+    'LeafRightForeArmRoll4': 'forearm_r', #new in 2023.2
+    'LeafRightForeArmRoll5': 'forearm_r', #new in 2023.2
 }
+
+
+TWIST_PERCENTS = {
+    'LeafLeftUpLegRoll1': 'ParamLeafLeftUpLegRoll1',
+    'LeafLeftUpLegRoll2': 'ParamLeafLeftUpLegRoll2', 
+    'LeafLeftUpLegRoll3': 'ParamLeafLeftUpLegRoll3', 
+    'LeafLeftUpLegRoll4': 'ParamLeafLeftUpLegRoll4', 
+    'LeafLeftUpLegRoll5': 'ParamLeafLeftUpLegRoll5',
+    'LeafLeftLegRoll1': 'ParamLeafLeftLegRoll1',
+    'LeafLeftLegRoll2': 'ParamLeafLeftLegRoll2', 
+    'LeafLeftLegRoll3': 'ParamLeafLeftLegRoll3', 
+    'LeafLeftLegRoll4': 'ParamLeafLeftLegRoll4', 
+    'LeafLeftLegRoll5': 'ParamLeafLeftLegRoll5',
+    
+    'LeafLeftArmRoll1': 'ParamLeafLeftArmRoll1',
+    'LeafLeftArmRoll2': 'ParamLeafLeftArmRoll2', 
+    'LeafLeftArmRoll3': 'ParamLeafLeftArmRoll3', 
+    'LeafLeftArmRoll4': 'ParamLeafLeftArmRoll4', 
+    'LeafLeftArmRoll5': 'ParamLeafLeftArmRoll5',
+    'LeafLeftForeArmRoll1': 'ParamLeafLeftForeArmRoll1',
+    'LeafLeftForeArmRoll2': 'ParamLeafLeftForeArmRoll2',
+    'LeafLeftForeArmRoll3': 'ParamLeafLeftForeArmRoll3',
+    'LeafLeftForeArmRoll4': 'ParamLeafLeftForeArmRoll4',
+    'LeafLeftForeArmRoll5': 'ParamLeafLeftForeArmRoll5',
+    
+    'LeafRightUpLegRoll1': 'ParamLeafRightUpLegRoll1',
+    'LeafRightUpLegRoll2': 'ParamLeafRightUpLegRoll2',
+    'LeafRightUpLegRoll3': 'ParamLeafRightUpLegRoll3',
+    'LeafRightUpLegRoll4': 'ParamLeafRightUpLegRoll4',
+    'LeafRightUpLegRoll5': 'ParamLeafRightUpLegRoll5',
+    'LeafRightLegRoll1': 'ParamLeafRightLegRoll1',
+    'LeafRightLegRoll2': 'ParamLeafRightLegRoll2',
+    'LeafRightLegRoll3': 'ParamLeafRightLegRoll3',
+    'LeafRightLegRoll4': 'ParamLeafRightLegRoll4',
+    'LeafRightLegRoll5': 'ParamLeafRightLegRoll5',
+    
+    'LeafRightArmRoll1': 'ParamLeafRightArmRoll1',
+    'LeafRightArmRoll2': 'ParamLeafRightArmRoll2',
+    'LeafRightArmRoll3': 'ParamLeafRightArmRoll3',
+    'LeafRightArmRoll4': 'ParamLeafRightArmRoll4',
+    'LeafRightArmRoll5': 'ParamLeafRightArmRoll5',
+    'LeafRightForeArmRoll1': 'ParamLeafRightForeArmRoll1',
+    'LeafRightForeArmRoll2': 'ParamLeafRightForeArmRoll2',
+    'LeafRightForeArmRoll3': 'ParamLeafRightForeArmRoll3',
+    'LeafRightForeArmRoll4': 'ParamLeafRightForeArmRoll4',
+    'LeafRightForeArmRoll5': 'ParamLeafRightForeArmRoll5',
+}
+
+
+TWIST_AXES = {
+    'LeafLeftUpLegRoll1': 'leftUpLegTwist',
+    'LeafLeftUpLegRoll2': 'leftUpLegTwist', 
+    'LeafLeftUpLegRoll3': 'leftUpLegTwist', 
+    'LeafLeftUpLegRoll4': 'leftUpLegTwist', 
+    'LeafLeftUpLegRoll5': 'leftUpLegTwist',
+    'LeafLeftLegRoll1': 'leftLegTwist',
+    'LeafLeftLegRoll2': 'leftLegTwist', 
+    'LeafLeftLegRoll3': 'leftLegTwist', 
+    'LeafLeftLegRoll4': 'leftLegTwist', 
+    'LeafLeftLegRoll5': 'leftLegTwist',
+    
+    'LeafLeftArmRoll1': 'leftArmTwist',
+    'LeafLeftArmRoll2': 'leftArmTwist', 
+    'LeafLeftArmRoll3': 'leftArmTwist', 
+    'LeafLeftArmRoll4': 'leftArmTwist', 
+    'LeafLeftArmRoll5': 'leftArmTwist',
+    'LeafLeftForeArmRoll1': 'leftForearmTwist',
+    'LeafLeftForeArmRoll2': 'leftForearmTwist',
+    'LeafLeftForeArmRoll3': 'leftForearmTwist',
+    'LeafLeftForeArmRoll4': 'leftForearmTwist',
+    'LeafLeftForeArmRoll5': 'leftForearmTwist',
+    
+    'LeafRightUpLegRoll1': 'rightUpLegTwist',
+    'LeafRightUpLegRoll2': 'rightUpLegTwist',
+    'LeafRightUpLegRoll3': 'rightUpLegTwist',
+    'LeafRightUpLegRoll4': 'rightUpLegTwist',
+    'LeafRightUpLegRoll5': 'rightUpLegTwist',
+    'LeafRightLegRoll1': 'rightLegTwist',
+    'LeafRightLegRoll2': 'rightLegTwist',
+    'LeafRightLegRoll3': 'rightLegTwist',
+    'LeafRightLegRoll4': 'rightLegTwist',
+    'LeafRightLegRoll5': 'rightLegTwist',
+    
+    'LeafRightArmRoll1': 'rightArmTwist',
+    'LeafRightArmRoll2': 'rightArmTwist',
+    'LeafRightArmRoll3': 'rightArmTwist',
+    'LeafRightArmRoll4': 'rightArmTwist',
+    'LeafRightArmRoll5': 'rightArmTwist',
+    'LeafRightForeArmRoll1': 'rightForearmTwist',
+    'LeafRightForeArmRoll2': 'rightForearmTwist',
+    'LeafRightForeArmRoll3': 'rightForearmTwist',
+    'LeafRightForeArmRoll4': 'rightForearmTwist',
+    'LeafRightForeArmRoll5': 'rightForearmTwist',
+}
+
 
 _ACTIVE_CHARACTER_NODE = None
 _ACTIVE_USER_DATA = None
 
 
 class QRigData(cg3dguru.udata.BaseData):
-    """A block of data to help convert a HIK character to Cascaduer's quick rig"""
+    """A block of data to help convert an HIK character to Cascaduer's quick rig"""
 
 
     @staticmethod
@@ -253,6 +356,27 @@ class QRigData(cg3dguru.udata.BaseData):
             cg3dguru.udata.create_attr('rightWeapon', 'message'),
             cg3dguru.udata.create_attr('alignPelvis', 'bool'),
             cg3dguru.udata.create_attr('createLayers', 'bool'),
+            
+            cg3dguru.udata.Attr('leftArmTwist', 'enum', enumName='X:Y:Z'),
+            cg3dguru.udata.Attr('leftForearmTwist', 'enum', enumName='X:Y:Z'),
+            cg3dguru.udata.Attr('leftUpLegTwist', 'enum', enumName='X:Y:Z'),
+            cg3dguru.udata.Attr('leftLegTwist', 'enum', enumName='X:Y:Z'),
+            cg3dguru.udata.Attr('rightArmTwist', 'enum', enumName='X:Y:Z'),
+            cg3dguru.udata.Attr('rightForearmTwist', 'enum', enumName='X:Y:Z'),
+            cg3dguru.udata.Attr('rightUpLegTwist', 'enum', enumName='X:Y:Z'),
+            cg3dguru.udata.Attr('rightLegTwist', 'enum', enumName='X:Y:Z'), 
+            
+            #cg3dguru.udata.Compound('twistAxes', 'compound', children =[
+                #cg3dguru.udata.Attr('leftArm', 'enum', enumName='X:Y:Z'),
+                #cg3dguru.udata.Attr('leftForearm', 'enum', enumName='X:Y:Z'),
+                #cg3dguru.udata.Attr('leftUpLeg', 'enum', enumName='X:Y:Z'),
+                #cg3dguru.udata.Attr('leftLeg', 'enum', enumName='X:Y:Z'),
+                #cg3dguru.udata.Attr('rightArm', 'enum', enumName='X:Y:Z'),
+                #cg3dguru.udata.Attr('rightForearm', 'enum', enumName='X:Y:Z'),
+                #cg3dguru.udata.Attr('rightUpLeg', 'enum', enumName='X:Y:Z'),
+                #cg3dguru.udata.Attr('rightLeg', 'enum', enumName='X:Y:Z'), 
+            #])
+            
         ]
         
         return attrs
@@ -264,12 +388,12 @@ class QRigData(cg3dguru.udata.BaseData):
     
     
 class CascExportData(cg3dguru.udata.BaseData):
-    """A list for nodes that should always be sent to cascadeur together
+    """A list for nodes that should always be sent to cascadeur
     
-    The CascExportData.exportNodes attribute can store meshes, joints,
-    skinClusters, or selectionSets. Meshes, joints and skinClusters will be
-    inspected to find all dependent joints and meshes. E.g. add a skinCluster
-    and all joints will be exported (as well as the meshes they deform).
+    The CascExportData.exportNodes attribute can store meshes, joints, and
+    skinClusters. Meshes, joints and skinClusters will be inspected to find
+    all dependent joints and meshes. E.g. add a skinCluster and all joints
+    will be exported (as well as the meshes they deform).
     """
     
     @staticmethod
@@ -332,13 +456,20 @@ def _get_joint_struct(key):
     return joint_struct
     
 
-def _get_section(section_name, keys, user_data = None):
+def _get_section(section_name, keys, twist_data = False, user_data=None):
     names_list = []
+    #This should always exist
+    hik_properties = _ACTIVE_CHARACTER_NODE.propertyState.get()
+    
     for key in keys:
         joint_struct = _get_joint_struct(key)
         ##let's skip invalid results
-        #if joint_struct['Joint name']:
-        names_list.append(joint_struct)        
+        if joint_struct['Joint name']:
+            if twist_data:
+                joint_struct['Strength'] = hik_properties.attr(TWIST_PERCENTS[key]).get()
+                joint_struct['Axis'] = user_data.attr(TWIST_AXES[key]).get()         
+            
+            names_list.append(joint_struct)        
     
     output = {
         'Section': section_name,
@@ -355,12 +486,15 @@ def _get_settings_values(user_data):
     return (user_data.alignPelvis.get(), user_data.createLayers.get())
 
 
+
 def get_qrig_struct(user_data = None):
-    
     default_spine = 'Spine1'
     if user_data:
         spine_joints = get_spine_joints(_ACTIVE_CHARACTER_NODE)
         if len(spine_joints) > 2:
+            if not user_data.chestJoint.inputs():
+                raise SpineException()
+            
             selected_chest_joint = user_data.chestJoint.inputs()[0]
             for spine_name, joint in spine_joints:
                 if joint == selected_chest_joint:
@@ -404,7 +538,15 @@ def get_qrig_struct(user_data = None):
     twists_title = {
         'Title' : 'Twist bones',
         'Sections' :  [
-            _get_section('Left arm', ['LeafLeftArmRoll1', 'LeafLeftForeArmRoll1']),
+            _get_section('Left arm',
+                         ['LeafLeftArmRoll1', 'LeafLeftArmRoll2',
+                          'LeafLeftArmRoll3', 'LeafLeftArmRoll4',
+                          'LeafLeftArmRoll5',
+                          'LeafLeftForeArmRoll1', 'LeafLeftForeArmRoll2',
+                          'LeafLeftForeArmRoll3', 'LeafLeftForeArmRoll4',
+                          'LeafLeftForeArmRoll5'],
+                         twist_data=True, user_data=user_data),
+            
             _get_section('Right arm', ['LeafRightArmRoll1', 'LeafRightForeArmRoll1']),
             _get_section('Left leg', ['LeafLeftUpLegRoll1', 'LeafLeftLegRoll1']),
             _get_section('Right leg', ['LeafRightUpLegRoll1', 'LeafRightLegRoll1']),
@@ -439,6 +581,24 @@ def add_transform_roots(transform_list, root_set):
         root_parent = get_root_parent(dag)
         if root_parent not in root_set:
             root_set.add(root_parent)
+            
+            
+            
+def has_twist(character_node, twist_names = None):
+    """Returns true of the twist(roll) attribute names are connected to a joint
+    
+    When no name(s) are provided all twist attributes are checked.
+    """
+    if twist_names is None:
+        twist_names = [key for key, value in TWIST_AXES.items()]
+        
+    has_twist = False
+    for name in twist_names:
+        if character_node.attr(name).get(source=True):
+            has_twist = True
+            
+    return has_twist
+            
 
 
 def get_skinned_meshes(character_node):
@@ -511,9 +671,21 @@ def get_skin_cluster_meshes(skin_clusters):
     meshes = set()
     for cluster in skin_clusters:
         output_geo = cluster.attr('outputGeometry')
-        for geo in output_geo.outputs():
-            if geo not in meshes:
-                meshes.add(geo)
+        
+        results = output_geo.outputs()
+        for result in results:
+            is_group_part = isinstance(result, pm.nodetypes.GroupParts)
+            while is_group_part:
+                result = result.outputGeometry.outputs()[0]
+                is_group_part = isinstance(result, pm.nodetypes.GroupParts)
+                
+            if result not in meshes:
+                meshes.add(result)            
+        
+        
+        #for geo in output_geo.outputs():
+            #if geo not in meshes:
+                #meshes.add(geo)
                 
     return meshes
     
@@ -535,7 +707,7 @@ def get_hik_joints(character_node):
 
 
 def get_spine_joints(character_node):
-    """returns a list of (spine_name, joint) that define the HIK spine"""
+    """returns a list of tuples (spine_name, joint) that define the HIK spine"""
 
     spine_joints = []
     spine_names = ['Spine', 'Spine1', 'Spine2', 'Spine3', 'Spine4', 'Spine5',
@@ -840,7 +1012,6 @@ def get_import_files():
         
         
     return files
-
 
 
 def import_fbx():

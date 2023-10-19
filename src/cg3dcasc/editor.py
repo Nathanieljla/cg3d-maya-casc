@@ -97,16 +97,21 @@ class HikExportEditor(cg3dguru.ui.Window):
         if not ok:
             return
         
-        selection = pm.ls(sl=True,type=['transform','joint', 'skinCluster', 'mesh'])
+        selection = pm.ls(sl=True)
+        
+        filtered_selection = pm.ls(sl=True,type=['transform','joint', 'skinCluster', 'mesh'])
         new_node = self._create_export_data()
         name = '{}_CSC_EXPORT'.format(data_name)
         pm.rename(new_node, name)
         self.node_to_select = new_node
         
-        answer =  QMessageBox.question(self.mayaWindow, 'Add', 'Add the current selection?')
-        if answer == QMessageBox.StandardButton.Yes:
-            if selection:
-                new_node.addMembers(selection)            
+        pm.select(selection, replace=True)
+        
+        if filtered_selection:
+            answer =  QMessageBox.question(self.mayaWindow, 'Add', 'Add the current selection?')
+            if answer == QMessageBox.StandardButton.Yes:
+                if filtered_selection:
+                    new_node.addMembers(filtered_selection)            
             
         self.init_ui()
         
@@ -150,7 +155,10 @@ class HikExportEditor(cg3dguru.ui.Window):
         if not self.export_data:
             return
         
-        cg3dcasc.export_rig(new_scene, self.export_data.node()) #, qrig_data=self.rig_data, character_node=self.active_selection)
+        try:
+            cg3dcasc.export_rig(new_scene, self.export_data.node()) #, qrig_data=self.rig_data, character_node=self.active_selection)
+        except cg3dcasc.SpineException:
+            pm.confirmDialog(message="You must set a chest joint before exporting",button=['Okay'])
         
         
     def on_dynamic_changed(self, *args):
@@ -192,7 +200,7 @@ class HikExportEditor(cg3dguru.ui.Window):
             self.rig_data = self.qrig_data_instance.get_data(self.active_selection)
             
         #hide some data based on the selected data
-        self.ui.qrig_data.setVisible(self.rig_data is not None)
+        self.ui.tabs.setTabVisible(1, self.rig_data is not None) #setVisible(self.rig_data is not None)
         self.ui.delete_data_button.setEnabled(self.active_selection is not None)
         
         
@@ -202,10 +210,13 @@ class HikExportEditor(cg3dguru.ui.Window):
 
         self.selection_changing = True
         self._get_active_node()
+        self._init_selection_set()
         self._init_spine_list()
         self._init_weapon_nodes()
         self._init_check_boxes()
-        self._init_extras_view()
+        if self.rig_data is not None:
+            self.ui.tabs.setCurrentWidget(self.ui.rig_tab)
+            
         self.selection_changing = False
         
         
@@ -224,7 +235,7 @@ class HikExportEditor(cg3dguru.ui.Window):
         if nodes_to_remove:
             object_set.removeMembers(nodes_to_remove)
             
-        self._init_extras_view()
+        self._init_selection_set()
         
         
     def on_add_selection(self):
@@ -245,7 +256,7 @@ class HikExportEditor(cg3dguru.ui.Window):
                                  #self.export_data.exportNodes, nextAvailable=True)
 
             
-        self._init_extras_view()
+        self._init_selection_set()
         
         
     def on_clear_weapon(self, weapon):
@@ -339,7 +350,8 @@ class HikExportEditor(cg3dguru.ui.Window):
         #let's activate and hide data based on our scene list
         invalid_nodes = self._get_invalid_characters()
         self.ui.add_hik_button.setEnabled(len(invalid_nodes) > 0)
-        self.ui.selected_data_group.setEnabled(self.active_selection is not None)
+        self.ui.tabs.setTabVisible(0, self.active_selection is not None)
+#        self.ui.selected_data_group.setEnabled(self.active_selection is not None)
 
     
     def _init_spine_list(self):
@@ -378,7 +390,7 @@ class HikExportEditor(cg3dguru.ui.Window):
             self.ui.spine_list.setCurrentText(valid_spine.name())
 
         
-    def _init_extras_view(self):
+    def _init_selection_set(self):
         self.ui.extras_list.clear()
         self.extras.clear()
         
@@ -428,10 +440,15 @@ class HikExportEditor(cg3dguru.ui.Window):
         self.loading_data = True
         self._init_scene_list()
         self._get_active_node()
+        self._init_selection_set()
         self._init_spine_list()
         self._init_weapon_nodes()
         self._init_check_boxes()
-        self._init_extras_view()
+        if self.rig_data is not None:
+            self.ui.tabs.setCurrentWidget(self.ui.rig_tab)
+        else:
+            self.ui.tabs.setCurrentWidget(self.ui.selection_tab)
+            
         self.loading_data = False
         
         
