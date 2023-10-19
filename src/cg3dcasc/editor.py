@@ -74,6 +74,7 @@ class HikExportEditor(cg3dguru.ui.Window):
         self.ui.create_data_button.released.connect(self.on_create_data)
         self.ui.delete_data_button.released.connect(self.on_delete_data)
         self.ui.add_hik_button.released.connect(self.on_add_hik)
+        
         self.ui.left_weapon_node.textChanged.connect( lambda : self.on_weapon_changed(self.ui.left_weapon_node, "leftWeapon") )
         self.ui.right_weapon_node.textChanged.connect( lambda : self.on_weapon_changed(self.ui.right_weapon_node, "rightWeapon") )
         self.ui.clear_left_weapon.pressed.connect(lambda : self.on_clear_weapon(self.ui.left_weapon_node))
@@ -83,8 +84,45 @@ class HikExportEditor(cg3dguru.ui.Window):
         self.ui.dynamic_set.stateChanged.connect(self.on_dynamic_changed)
         self.ui.align_pelvis.stateChanged.connect(self.on_align_pelvis)
         self.ui.create_layers.stateChanged.connect(self.on_create_layers)
+        
+        self.ui.global_twist.currentIndexChanged.connect(self.on_global_twist_changed)
+        
+        self.ui.left_arm_twist.currentIndexChanged.connect(lambda: self.on_set_twist(self.ui.left_arm_twist, 'leftArmTwist'))
+        self.ui.left_forearm_twist.currentIndexChanged.connect(lambda: self.on_set_twist(self.ui.left_forearm_twist, 'leftForearmTwist'))
+        self.ui.left_upper_leg_twist.currentIndexChanged.connect(lambda: self.on_set_twist(self.ui.left_upper_leg_twist, 'leftUpperLegTwist'))
+        self.ui.left_leg_twist.currentIndexChanged.connect(lambda: self.on_set_twist(self.ui.left_leg_twist, 'leftLegTwist'))
+        
+        self.ui.right_arm_twist.currentIndexChanged.connect(lambda: self.on_set_twist(self.ui.right_arm_twist, 'rightArmTwist'))
+        self.ui.right_forearm_twist.currentIndexChanged.connect(lambda: self.on_set_twist(self.ui.right_forearm_twist, 'rightForearmTwist'))
+        self.ui.right_upper_leg_twist.currentIndexChanged.connect(lambda: self.on_set_twist(self.ui.right_upper_leg_twist, 'rightUpperLegTwist'))
+        self.ui.right_leg_twist.currentIndexChanged.connect(lambda: self.on_set_twist(self.ui.right_leg_twist, 'rightLegTwist'))
+
         self.ui.rig_current_button.pressed.connect(lambda: self.on_export(False))
         self.ui.rig_new_button.pressed.connect(lambda: self.on_export(True))
+        
+        
+    def on_global_twist_changed(self):
+        if self.loading_data or not self.rig_data or self.selection_changing:
+            return
+        
+        value = self.ui.global_twist.currentIndex()
+        if value < 3:
+            attrs = ['leftArmTwist', 'leftForearmTwist', 'leftUpperLegTwist',
+                     'leftLegTwist', 'rightArmTwist', 'rightForearmTwist',
+                     'rightUpperLegTwist', 'rightLegTwist']
+            
+            for attr in attrs:
+                self.rig_data.attr(attr).set(value)
+                
+            self._init_twist_data()
+        
+        
+    def on_set_twist(self, control, attr_name):
+        if self.loading_data or not self.rig_data or self.selection_changing:
+            return
+        
+        self.rig_data.attr(attr_name).set(control.currentIndex())
+        self._init_twist_data()
                 
                   
     def _create_export_data(self):
@@ -204,18 +242,34 @@ class HikExportEditor(cg3dguru.ui.Window):
         self.ui.delete_data_button.setEnabled(self.active_selection is not None)
         
         
-    def on_node_selected(self, *args):
-        if self.loading_data:
-            return
-
-        self.selection_changing = True
+        
+    def _init_ui(self):
+        self._init_scene_list()
         self._get_active_node()
         self._init_selection_set()
         self._init_spine_list()
         self._init_weapon_nodes()
         self._init_check_boxes()
+        self._init_twist_data()
         if self.rig_data is not None:
             self.ui.tabs.setCurrentWidget(self.ui.rig_tab)
+        else:
+            self.ui.tabs.setCurrentWidget(self.ui.selection_tab)
+        
+        
+    def on_node_selected(self, *args):
+        if self.loading_data:
+            return
+
+        self.selection_changing = True
+        self._init_ui()
+        #self._get_active_node()
+        #self._init_selection_set()
+        #self._init_spine_list()
+        #self._init_weapon_nodes()
+        #self._init_check_boxes()
+        #if self.rig_data is not None:
+            #self.ui.tabs.setCurrentWidget(self.ui.rig_tab)
             
         self.selection_changing = False
         
@@ -246,16 +300,7 @@ class HikExportEditor(cg3dguru.ui.Window):
         selection = pm.ls(sl=True,type=['transform','joint', 'skinCluster', 'mesh'])
         if selection:
             object_set.addMembers(selection)
-        
-        #for selected in selection:
-            #if selected.message.isConnectedTo(self.export_data.exportNodes,
-                                              #checkOtherArray=True):
-                #continue
-            
-            #pm.Attribute.connect(selected.message,
-                                 #self.export_data.exportNodes, nextAvailable=True)
-
-            
+                    
         self._init_selection_set()
         
         
@@ -320,6 +365,11 @@ class HikExportEditor(cg3dguru.ui.Window):
         
         
     def _init_scene_list(self):
+        #This list should only change when scene data is being loaded,
+        #not when selection changes cause the ui to update.
+        if not self.loading_data:
+            return
+                
         self.scene_nodes.clear()
         self.ui.scene_list.clear()
             
@@ -434,20 +484,75 @@ class HikExportEditor(cg3dguru.ui.Window):
         else:
             self.ui.align_pelvis.setChecked(self.rig_data.alignPelvis.get())
             self.ui.create_layers.setChecked(self.rig_data.createLayers.get())
-                        
+            
+            
+            
+    def _init_twist_data(self):
+        has_data = self.rig_data is not None and len(self.rig_data.characterNode.inputs()) > 0
+        self.ui.twist_settings.setVisible(has_data) #self.rig_data is not None)
+        if not has_data: #self.rig_data:
+            return
+        
+        character_node = self.rig_data.characterNode.inputs()[0]
+        if not cg3dcasc.has_twist(character_node):
+            self.ui.twist_settings.setVisible(False)
+            return
+        
+        valid_twists = []
+        def get_twist_state(label, dropdown, twist_name, setting):
+            has = cg3dcasc.has_twist(character_node, twist_name)
+            label.setEnabled(has)
+            dropdown.setCurrentIndex(setting.get())
+            dropdown.setEnabled(has)
+            
+            if has:
+                valid_twists.append(setting)
+
+        get_twist_state(self.ui.left_arm, self.ui.left_arm_twist, 'LeafLeftArmRoll1', self.rig_data.leftArmTwist)
+        get_twist_state(self.ui.left_forearm, self.ui.left_forearm_twist, 'LeafLeftForeArmRoll1', self.rig_data.leftForearmTwist)
+        get_twist_state(self.ui.left_upper_leg, self.ui.left_upper_leg_twist, 'LeafLeftUpLegRoll1', self.rig_data.leftUpperLegTwist)
+        get_twist_state(self.ui.left_leg, self.ui.left_leg_twist, 'LeafLeftLegRoll1', self.rig_data.leftLegTwist)
+        
+        get_twist_state(self.ui.right_arm, self.ui.right_arm_twist, 'LeafRightArmRoll1', self.rig_data.rightArmTwist)
+        get_twist_state(self.ui.right_forearm, self.ui.right_forearm_twist, 'LeafRightForeArmRoll1', self.rig_data.rightForearmTwist)
+        get_twist_state(self.ui.right_upper_leg, self.ui.right_upper_leg_twist, 'LeafRightUpLegRoll1', self.rig_data.rightUpperLegTwist)
+        get_twist_state(self.ui.right_leg, self.ui.right_leg_twist, 'LeafRightLegRoll1', self.rig_data.rightLegTwist)
+        
+        twist_value = valid_twists[0].get()
+        mixed = False
+        for attr in valid_twists:
+            if attr.get() != twist_value:
+                mixed = True
+                break
+         
+        mixed_idx = self.ui.global_twist.findText('...')   
+        if mixed:
+            if mixed_idx < 0:
+                self.ui.global_twist.addItem('...')
+            
+            self.ui.global_twist.setCurrentIndex(3)
+        else:
+            if mixed_idx > -1:
+                self.ui.global_twist.removeItem(mixed_idx)
+                
+            self.ui.global_twist.setCurrentIndex(twist_value)
+
+        
         
     def init_ui(self):
         self.loading_data = True
-        self._init_scene_list()
-        self._get_active_node()
-        self._init_selection_set()
-        self._init_spine_list()
-        self._init_weapon_nodes()
-        self._init_check_boxes()
-        if self.rig_data is not None:
-            self.ui.tabs.setCurrentWidget(self.ui.rig_tab)
-        else:
-            self.ui.tabs.setCurrentWidget(self.ui.selection_tab)
+        #self._init_scene_list()
+        self._init_ui()
+        #self._get_active_node()
+        #self._init_selection_set()
+        #self._init_spine_list()
+        #self._init_weapon_nodes()
+        #self._init_check_boxes()
+        #self._init_twist_data()
+        #if self.rig_data is not None:
+            #self.ui.tabs.setCurrentWidget(self.ui.rig_tab)
+        #else:
+            #self.ui.tabs.setCurrentWidget(self.ui.selection_tab)
             
         self.loading_data = False
         

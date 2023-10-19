@@ -2,6 +2,7 @@
 import json
 import tempfile
 import os
+import typing
 import uuid
 import winreg
 import psutil
@@ -359,11 +360,14 @@ class QRigData(cg3dguru.udata.BaseData):
             
             cg3dguru.udata.Attr('leftArmTwist', 'enum', enumName='X:Y:Z'),
             cg3dguru.udata.Attr('leftForearmTwist', 'enum', enumName='X:Y:Z'),
-            cg3dguru.udata.Attr('leftUpLegTwist', 'enum', enumName='X:Y:Z'),
+            
+            cg3dguru.udata.Attr('leftUpperLegTwist', 'enum', enumName='X:Y:Z'),
             cg3dguru.udata.Attr('leftLegTwist', 'enum', enumName='X:Y:Z'),
+            
             cg3dguru.udata.Attr('rightArmTwist', 'enum', enumName='X:Y:Z'),
             cg3dguru.udata.Attr('rightForearmTwist', 'enum', enumName='X:Y:Z'),
-            cg3dguru.udata.Attr('rightUpLegTwist', 'enum', enumName='X:Y:Z'),
+            
+            cg3dguru.udata.Attr('rightUpperLegTwist', 'enum', enumName='X:Y:Z'),
             cg3dguru.udata.Attr('rightLegTwist', 'enum', enumName='X:Y:Z'), 
             
             #cg3dguru.udata.Compound('twistAxes', 'compound', children =[
@@ -584,7 +588,7 @@ def add_transform_roots(transform_list, root_set):
             
             
             
-def has_twist(character_node, twist_names = None):
+def has_twist(character_node, twist_names: str | typing.List[str]= None):
     """Returns true of the twist(roll) attribute names are connected to a joint
     
     When no name(s) are provided all twist attributes are checked.
@@ -592,9 +596,12 @@ def has_twist(character_node, twist_names = None):
     if twist_names is None:
         twist_names = [key for key, value in TWIST_AXES.items()]
         
+    if isinstance(twist_names, str):
+        twist_names = [twist_names]
+        
     has_twist = False
     for name in twist_names:
-        if character_node.attr(name).get(source=True):
+        if character_node.attr(name).inputs():
             has_twist = True
             
     return has_twist
