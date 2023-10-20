@@ -1040,7 +1040,7 @@ class MyInstaller(ModuleManager):
             if child.is_dir():
                 shutil.rmtree(str(child))
             else:
-                child.unlink(missing_ok=True)
+                child.unlink() #missing_ok=True) #missing_ok doens't work for maya 2022
                 
                 
     #@staticmethod         

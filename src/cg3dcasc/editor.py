@@ -58,8 +58,9 @@ class HikExportEditor(cg3dguru.ui.Window):
         self.spine_joints = {}
         self.extras = {}
         
-        self.loading_data = False #maya scene changed
+        self.data_Changing = False #maya scene changed
         self.selection_changing = False #selection set selection change is occuring
+        self.global_twist_changing = False
         self.node_to_select = None
         self.active_selection = None
         self.rig_data = None
@@ -102,11 +103,12 @@ class HikExportEditor(cg3dguru.ui.Window):
         
         
     def on_global_twist_changed(self):
-        if self.loading_data or not self.rig_data or self.selection_changing:
+        if self.data_Changing or not self.rig_data or self.selection_changing:
             return
         
         value = self.ui.global_twist.currentIndex()
         if value < 3:
+            self.global_twist_changing = True
             attrs = ['leftArmTwist', 'leftForearmTwist', 'leftUpperLegTwist',
                      'leftLegTwist', 'rightArmTwist', 'rightForearmTwist',
                      'rightUpperLegTwist', 'rightLegTwist']
@@ -115,14 +117,17 @@ class HikExportEditor(cg3dguru.ui.Window):
                 self.rig_data.attr(attr).set(value)
                 
             self._init_twist_data()
+            self.global_twist_changing = False
         
         
     def on_set_twist(self, control, attr_name):
-        if self.loading_data or not self.rig_data or self.selection_changing:
+        if self.data_Changing or not self.rig_data or self.selection_changing:
             return
         
         self.rig_data.attr(attr_name).set(control.currentIndex())
-        self._init_twist_data()
+        
+        if not self.global_twist_changing:
+            self._init_twist_data()
                 
                   
     def _create_export_data(self):
@@ -200,7 +205,7 @@ class HikExportEditor(cg3dguru.ui.Window):
         
         
     def on_dynamic_changed(self, *args):
-        if self.loading_data or not self.active_selection or self.selection_changing:
+        if self.data_Changing or not self.active_selection or self.selection_changing:
             return
         
         if not self.export_data:
@@ -210,14 +215,14 @@ class HikExportEditor(cg3dguru.ui.Window):
 
         
     def on_align_pelvis(self, *args):
-        if self.loading_data or not self.active_selection or self.selection_changing:
+        if self.data_Changing or not self.active_selection or self.selection_changing:
             return
         
         self.rig_data.alignPelvis.set(args[0] != 0)
       
         
     def on_create_layers(self, *args):
-        if self.loading_data or not self.active_selection or self.selection_changing:
+        if self.data_Changing or not self.active_selection or self.selection_changing:
             return
         
         self.rig_data.createLayers.set(args[0] != 0)    
@@ -242,8 +247,10 @@ class HikExportEditor(cg3dguru.ui.Window):
         self.ui.delete_data_button.setEnabled(self.active_selection is not None)
         
         
-        
-    def _init_ui(self):
+    def _init_ui(self, selection_changing, data_Changing):
+        self.selection_changing = selection_changing
+        self.data_Changing = data_Changing
+                
         self._init_scene_list()
         self._get_active_node()
         self._init_selection_set()
@@ -255,27 +262,20 @@ class HikExportEditor(cg3dguru.ui.Window):
             self.ui.tabs.setCurrentWidget(self.ui.rig_tab)
         else:
             self.ui.tabs.setCurrentWidget(self.ui.selection_tab)
+            
+        self.selection_changing = False
+        self.data_Changing = False
         
         
     def on_node_selected(self, *args):
-        if self.loading_data:
+        if self.data_Changing:
             return
 
-        self.selection_changing = True
-        self._init_ui()
-        #self._get_active_node()
-        #self._init_selection_set()
-        #self._init_spine_list()
-        #self._init_weapon_nodes()
-        #self._init_check_boxes()
-        #if self.rig_data is not None:
-            #self.ui.tabs.setCurrentWidget(self.ui.rig_tab)
-            
-        self.selection_changing = False
+        self._init_ui(True, False)
         
         
     def on_remove_selection(self):
-        if self.loading_data or not self.export_data or self.selection_changing:
+        if self.data_Changing or not self.export_data or self.selection_changing:
             return
         
         object_set = self.export_data.node()
@@ -293,7 +293,7 @@ class HikExportEditor(cg3dguru.ui.Window):
         
         
     def on_add_selection(self):
-        if self.loading_data or not self.export_data or self.selection_changing:
+        if self.data_Changing or not self.export_data or self.selection_changing:
             return              
         
         object_set = self.export_data.node()
@@ -309,7 +309,7 @@ class HikExportEditor(cg3dguru.ui.Window):
         
         
     def on_weapon_changed(self, control, attr_name):
-        if self.loading_data or not self.active_selection or self.selection_changing:
+        if self.data_Changing or not self.active_selection or self.selection_changing:
             return                 
         
         name = control.text()
@@ -333,7 +333,7 @@ class HikExportEditor(cg3dguru.ui.Window):
 
 
     def on_spine_choice_changed(self, *args, **kwargs):
-        if self.loading_data or not self.active_selection or self.selection_changing:
+        if self.data_Changing or not self.active_selection or self.selection_changing:
             return        
         
         joint = self.ui.spine_list.currentData()
@@ -365,9 +365,9 @@ class HikExportEditor(cg3dguru.ui.Window):
         
         
     def _init_scene_list(self):
-        #This list should only change when scene data is being loaded,
-        #not when selection changes cause the ui to update.
-        if not self.loading_data:
+        #This list should only change when scene data is changing,
+        #NOT when selection changes cause the ui to update.
+        if not self.data_Changing:
             return
                 
         self.scene_nodes.clear()
@@ -489,8 +489,8 @@ class HikExportEditor(cg3dguru.ui.Window):
             
     def _init_twist_data(self):
         has_data = self.rig_data is not None and len(self.rig_data.characterNode.inputs()) > 0
-        self.ui.twist_settings.setVisible(has_data) #self.rig_data is not None)
-        if not has_data: #self.rig_data:
+        self.ui.twist_settings.setVisible(has_data)
+        if not has_data:
             return
         
         character_node = self.rig_data.characterNode.inputs()[0]
@@ -537,24 +537,9 @@ class HikExportEditor(cg3dguru.ui.Window):
                 
             self.ui.global_twist.setCurrentIndex(twist_value)
 
-        
-        
+         
     def init_ui(self):
-        self.loading_data = True
-        #self._init_scene_list()
-        self._init_ui()
-        #self._get_active_node()
-        #self._init_selection_set()
-        #self._init_spine_list()
-        #self._init_weapon_nodes()
-        #self._init_check_boxes()
-        #self._init_twist_data()
-        #if self.rig_data is not None:
-            #self.ui.tabs.setCurrentWidget(self.ui.rig_tab)
-        #else:
-            #self.ui.tabs.setCurrentWidget(self.ui.selection_tab)
-            
-        self.loading_data = False
+        self._init_ui(False, True)
         
         
     def scene_loaded(self):
@@ -578,7 +563,6 @@ class HikExportEditor(cg3dguru.ui.Window):
     
     
     def remove_script_job(self, jobId):
-        print("removing script job")
         self.ui.destroyed.disconnect( self.job_handlers[jobId] )
         pm.scriptJob( kill = jobId )
         

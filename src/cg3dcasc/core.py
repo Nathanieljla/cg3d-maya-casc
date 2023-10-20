@@ -81,9 +81,9 @@ HIK_ATTRS = {
     'LeftHandRing2':'ring_finger_l_2',
     'LeftHandRing3':'ring_finger_l_3',
     'LeftHandRing4': None,
-    'LeftHandPinky1':'pinky_finger_l_1',
-    'LeftHandPinky2':'pinky_finger_l_2', 
-    'LeftHandPinky3':'pinky_finger_l_3',
+    'LeftHandPinky1':'pinky_l_1', #pinky_finger_l_1 (finger isn't in the name 2023.2)
+    'LeftHandPinky2':'pinky_l_2', 
+    'LeftHandPinky3':'pinky_l_3',
     'LeftHandPinky4': None,
     'LeftHandExtraFinger1': None,
     'LeftHandExtraFinger2': None, 
@@ -175,9 +175,9 @@ HIK_ATTRS = {
     'RightHandRing2':'ring_finger_r_2',
     'RightHandRing3':'ring_finger_r_3',
     'RightHandRing4': None,
-    'RightHandPinky1':'pinky_finger_r_1',
-    'RightHandPinky2':'pinky_finger_r_2', 
-    'RightHandPinky3':'pinky_finger_r_3',
+    'RightHandPinky1':'pinky_r_1', #pinky_finger_r_1 (the finger isn't part of the pink name?)
+    'RightHandPinky2':'pinky_r_2', 
+    'RightHandPinky3':'pinky_r_3',
     'RightHandPinky4': None,
     'RightHandExtraFinger1': None,
     'RightHandExtraFinger2': None, 
@@ -294,11 +294,11 @@ TWIST_PERCENTS = {
 
 
 TWIST_AXES = {
-    'LeafLeftUpLegRoll1': 'leftUpLegTwist',
-    'LeafLeftUpLegRoll2': 'leftUpLegTwist', 
-    'LeafLeftUpLegRoll3': 'leftUpLegTwist', 
-    'LeafLeftUpLegRoll4': 'leftUpLegTwist', 
-    'LeafLeftUpLegRoll5': 'leftUpLegTwist',
+    'LeafLeftUpLegRoll1': 'leftUpperLegTwist',
+    'LeafLeftUpLegRoll2': 'leftUpperLegTwist', 
+    'LeafLeftUpLegRoll3': 'leftUpperLegTwist', 
+    'LeafLeftUpLegRoll4': 'leftUpperLegTwist', 
+    'LeafLeftUpLegRoll5': 'leftUpperLegTwist',
     'LeafLeftLegRoll1': 'leftLegTwist',
     'LeafLeftLegRoll2': 'leftLegTwist', 
     'LeafLeftLegRoll3': 'leftLegTwist', 
@@ -316,11 +316,11 @@ TWIST_AXES = {
     'LeafLeftForeArmRoll4': 'leftForearmTwist',
     'LeafLeftForeArmRoll5': 'leftForearmTwist',
     
-    'LeafRightUpLegRoll1': 'rightUpLegTwist',
-    'LeafRightUpLegRoll2': 'rightUpLegTwist',
-    'LeafRightUpLegRoll3': 'rightUpLegTwist',
-    'LeafRightUpLegRoll4': 'rightUpLegTwist',
-    'LeafRightUpLegRoll5': 'rightUpLegTwist',
+    'LeafRightUpLegRoll1': 'rightUpperLegTwist',
+    'LeafRightUpLegRoll2': 'rightUpperLegTwist',
+    'LeafRightUpLegRoll3': 'rightUpperLegTwist',
+    'LeafRightUpLegRoll4': 'rightUpperLegTwist',
+    'LeafRightUpLegRoll5': 'rightUpperLegTwist',
     'LeafRightLegRoll1': 'rightLegTwist',
     'LeafRightLegRoll2': 'rightLegTwist',
     'LeafRightLegRoll3': 'rightLegTwist',
@@ -524,7 +524,7 @@ def get_qrig_struct(user_data = None):
             _get_section('Index finger', ['LeftHandIndex1', 'LeftHandIndex2', 'LeftHandIndex3']),
             _get_section('Middle finger', ['LeftHandMiddle1', 'LeftHandMiddle2', 'LeftHandMiddle3']),
             _get_section('Ring finger', ['LeftHandRing1', 'LeftHandRing2', 'LeftHandRing3']),
-            _get_section('Pinky finger', ['LeftHandPinky1', 'LeftHandPinky2', 'LeftHandPinky3']),
+            _get_section('Pinky', ['LeftHandPinky1', 'LeftHandPinky2', 'LeftHandPinky3']),
             ]
     }
     
@@ -535,7 +535,7 @@ def get_qrig_struct(user_data = None):
             _get_section('Index finger', ['RightHandIndex1', 'RightHandIndex2', 'RightHandIndex3']),
             _get_section('Middle finger', ['RightHandMiddle1', 'RightHandMiddle2', 'RightHandMiddle3']),
             _get_section('Ring finger', ['RightHandRing1', 'RightHandRing2', 'RightHandRing3']),
-            _get_section('Pinky finger', ['RightHandPinky1', 'RightHandPinky2', 'RightHandPinky3']),
+            _get_section('Pinky', ['RightHandPinky1', 'RightHandPinky2', 'RightHandPinky3']),
             ]
     }
     
@@ -551,9 +551,28 @@ def get_qrig_struct(user_data = None):
                           'LeafLeftForeArmRoll5'],
                          twist_data=True, user_data=user_data),
             
-            _get_section('Right arm', ['LeafRightArmRoll1', 'LeafRightForeArmRoll1']),
-            _get_section('Left leg', ['LeafLeftUpLegRoll1', 'LeafLeftLegRoll1']),
-            _get_section('Right leg', ['LeafRightUpLegRoll1', 'LeafRightLegRoll1']),
+            _get_section('Right arm', ['LeafRightArmRoll1', 'LeafRightArmRoll2',
+                          'LeafRightArmRoll3', 'LeafRightArmRoll4',
+                          'LeafRightArmRoll5',
+                          'LeafRightForeArmRoll1', 'LeafRightForeArmRoll2',
+                          'LeafRightForeArmRoll3', 'LeafRightForeArmRoll4',
+                          'LeafRightForeArmRoll5'],
+                         twist_data=True, user_data=user_data),
+            
+            _get_section('Left leg', ['LeafLeftUpLegRoll1', 'LeafLeftUpLegRoll2',
+                          'LeafLeftUpLegRoll3', 'LeafLeftUpLegRoll4',
+                          'LeafLeftUpLegRoll5',
+                          'LeafLeftLegRoll1', 'LeafLeftLegRoll2',
+                          'LeafLeftLegRoll3', 'LeafLeftLegRoll4',
+                          'LeafLeftLegRoll5'],
+                         twist_data=True, user_data=user_data),
+            _get_section('Right leg', ['LeafRightUpLegRoll1', 'LeafRightUpLegRoll2',
+                          'LeafRightUpLegRoll3', 'LeafRightUpLegRoll4',
+                          'LeafRightUpLegRoll5',
+                          'LeafRightLegRoll1', 'LeafRightLegRoll2',
+                          'LeafRightLegRoll3', 'LeafRightLegRoll4',
+                          'LeafRightLegRoll5'],
+                         twist_data=True, user_data=user_data),
             ]
     } 
     
@@ -588,8 +607,8 @@ def add_transform_roots(transform_list, root_set):
             
             
             
-def has_twist(character_node, twist_names: str | typing.List[str]= None):
-    """Returns true of the twist(roll) attribute names are connected to a joint
+def has_twist(character_node, twist_names = None):
+    """Returns true if the twist(roll) attribute names are connected to a joint
     
     When no name(s) are provided all twist attributes are checked.
     """
@@ -883,10 +902,12 @@ def _build_default_set():
             #camera's are shape data, so we need to get the tranform
             assemblies.discard(c.getParent())
             
-        exportables = assemblies
+        exportables = list(assemblies)
         
-    export_node, data = CascExportData.create_node(nodeType='objectSet')    
-    export_node.addMembers(exportables)
+    export_node, data = CascExportData.create_node(nodeType='objectSet')
+    if exportables:
+        export_node.addMembers(exportables)
+        
     pm.rename(export_node, 'CACS_EXPORT')
     pm.select(selection, replace=True)
     
@@ -937,7 +958,7 @@ def export(export_set=None, export_rig=False, cmd_string='', textures=True, only
 
     #delete previous entries
     for child in temp_dir.iterdir():
-        child.unlink(missing_ok=True)
+        child.unlink() #missing_ok=True) #missing_ok=True) #missing_ok doens't work for maya 2022
 
     if export_set:
         export_nodes = [export_set]
@@ -950,13 +971,14 @@ def export(export_set=None, export_rig=False, cmd_string='', textures=True, only
         if not export_nodes:
             #There's nothing to export in the scene, so let's build a default set.
             export_nodes = [_build_default_set()]
-              
+             
+    #export our data 
     export_roots = set()
     for node in export_nodes:
         roots = _export_data(node, temp_dir, export_rig, not only_textures)
         export_roots.update(roots)
         
-    #Let's export our texture infor
+    #Let's export our texture info
     texture_mappings = {}
     if textures or only_textures:
         print("Exporting textures")
