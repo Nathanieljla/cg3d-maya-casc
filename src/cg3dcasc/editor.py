@@ -9,7 +9,7 @@ import cg3dcasc
 
 WINDOW_NAME = 'HIK Export'
 
-#for Designer "PromotTo" you want to put cg3dmaya/cascadeur/editor.py for the header
+#for QT Designer "PromotTo" you want to put cg3dmaya/cascadeur/editor.py for the header
 #and use QUiLoader.registerCustomWidget(DropLinEdit)
 class DropLineEdit(QLineEdit):
     def __init__(self, *args, **kwargs):
@@ -86,6 +86,7 @@ class HikExportEditor(cg3dguru.ui.Window):
         self.ui.align_pelvis.stateChanged.connect(self.on_align_pelvis)
         self.ui.create_layers.stateChanged.connect(self.on_create_layers)
         
+        self.ui.strength_percents.pressed.connect(self.show_percents)
         self.ui.global_twist.currentIndexChanged.connect(self.on_global_twist_changed)
         
         self.ui.left_arm_twist.currentIndexChanged.connect(lambda: self.on_set_twist(self.ui.left_arm_twist, 'leftArmTwist'))
@@ -100,6 +101,38 @@ class HikExportEditor(cg3dguru.ui.Window):
 
         self.ui.rig_current_button.pressed.connect(lambda: self.on_export(False))
         self.ui.rig_new_button.pressed.connect(lambda: self.on_export(True))
+        
+        
+        
+    def show_percents(self):
+        if self.rig_data is None or not self.rig_data.characterNode.inputs():
+            return
+        
+        #selection = pm.ls(sl=True)
+        pm.select(self.rig_data.characterNode.inputs()[0].propertyState.get(), replace=True)
+        
+        pm.runtime.ToggleAttributeEditor()    
+        visible = pm.windows.workspaceControl('AttributeEditor',visible=True,query=True)
+        
+        if not visible:
+            pm.runtime.ToggleAttributeEditor()    
+        
+        #if visible and not selection:
+            #return
+        
+        #elif visible and selection:
+            #pm.Mel.eval('commitAENotes($gAECurrentTab); copyAEWindow;')
+            #pm.select(selection, replace=True)
+            
+        #elif not visible and not selection:
+            #pm.runtime.ToggleAttributeEditor()
+            #return
+        
+        #elif not visible and selection:
+            #pm.runtime.ToggleAttributeEditor()
+            #pm.Mel.eval('commitAENotes($gAECurrentTab); copyAEWindow;')
+            #pm.runtime.ToggleAttributeEditor()
+            #pm.select(selection, replace=True)
         
         
     def on_global_twist_changed(self):
@@ -571,4 +604,7 @@ class HikExportEditor(cg3dguru.ui.Window):
 def run(*args):
     filepath = os.path.join(cg3dcasc.__path__[0],  'Cascadeur.ui' )
     editor = HikExportEditor(WINDOW_NAME, filepath)
+
+    editor.ui.resize(editor.ui.layout().minimumSize())
     editor.ui.show()
+
