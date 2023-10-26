@@ -3,7 +3,9 @@
 ![maya2022](https://img.shields.io/badge/Maya2022-tested-brightgreen.svg)
 
 # cg3d-maya-casc
-Easily bridge data between Maya and Cascadeur with this Maya Module
+Easily bridge data between Maya and Cascadeur with this Maya Module.
+
+[Youtube video on how to use](https://www.youtube.com/watch?v=z0PIIlQyxMI)
 
 # Installation
 
