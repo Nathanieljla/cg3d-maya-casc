@@ -437,20 +437,30 @@ def _get_input_joint(key):
     if not inputs:
         return None
     
-    return inputs[0]    
+    return inputs[0]
 
 
 
-def _get_joint_struct(key):    
+def _joint_struct():
+    #Just an alternative to joint_struct.copy()
     joint_struct = {
-        'Bone name': HIK_ATTRS[key],
+        'Bone name': '',
         'Joint name': '',
         'Joint path': [],
-    }    
+    }
     
-    joint = _get_input_joint(key)
-    if joint is None:
-        return joint_struct
+    return joint_struct
+
+
+def _get_joint_entry(hik_key, joint_struct = None, joint=None):
+    if joint_struct is None:
+        joint_struct = _joint_struct()
+        joint_struct['Bone name'] = HIK_ATTRS[hik_key]
+        
+    if joint is None: 
+        joint = _get_input_joint(hik_key)
+        if joint is None:
+            return joint_struct
     
     parent_list = []
     _get_list_of_parents(joint, parent_list)
@@ -466,7 +476,7 @@ def _get_section(section_name, keys, twist_data = False, user_data=None):
     hik_properties = _ACTIVE_CHARACTER_NODE.propertyState.get()
     
     for key in keys:
-        joint_struct = _get_joint_struct(key)
+        joint_struct = _get_joint_entry(key)
         ##let's skip invalid results
         if joint_struct['Joint name']:
             if twist_data:
@@ -491,9 +501,28 @@ def _get_settings_values(user_data):
 
 
 
+def _add_weapon_entry(section, bone_name, joint):
+    weapon_struct = _joint_struct()
+    weapon_struct['Bone name'] = bone_name
+    _get_joint_entry('', weapon_struct, joint)
+    section['Names'].append(weapon_struct)    
+
+
+
 def get_qrig_struct(user_data = None):
     default_spine = 'Spine1'
+    left_weapon = ''
+    right_weapon = ''
     if user_data:
+        left_weapon = user_data.leftWeapon.inputs()
+        right_weapon = user_data.rightWeapon.inputs()
+        if left_weapon:
+            left_weapon = left_weapon[0]
+            
+        if right_weapon:
+            right_weapon = right_weapon[0]
+        
+        
         spine_joints = get_spine_joints(_ACTIVE_CHARACTER_NODE)
         if len(spine_joints) > 2:
             if not user_data.chestJoint.inputs():
@@ -506,12 +535,21 @@ def get_qrig_struct(user_data = None):
                     print('spine name {}'.format(spine_name))
     
     
+    l_arm_section = _get_section('Left arm', ['LeftShoulder', 'LeftArm', 'LeftForeArm', 'LeftHand'])
+    r_arm_section =  _get_section('Right arm', ['RightShoulder', 'RightArm', 'RightForeArm', 'RightHand'])
+    
+    if left_weapon:
+        _add_weapon_entry(l_arm_section, 'weapon_l', left_weapon)
+
+    if right_weapon:
+        _add_weapon_entry(r_arm_section, 'weapon_r', right_weapon)
+        
     body_title = {
         'Title' : 'Body',
         'Sections' :  [
             _get_section('Body', ['Hips', 'Spine', default_spine, 'Neck', 'Head']),
-            _get_section('Left arm', ['LeftShoulder', 'LeftArm', 'LeftForeArm', 'LeftHand']),
-            _get_section('Right arm', ['RightShoulder', 'RightArm', 'RightForeArm', 'RightHand']),
+            l_arm_section, #_get_section('Left arm', ['LeftShoulder', 'LeftArm', 'LeftForeArm', 'LeftHand']),
+            r_arm_section, #_get_section('Right arm', ['RightShoulder', 'RightArm', 'RightForeArm', 'RightHand']),
             _get_section('Left leg', ['LeftUpLeg', 'LeftLeg', 'LeftFoot', 'LeftToeBase']),
             _get_section('Right leg', ['RightUpLeg', 'RightLeg', 'RightFoot', 'RightToeBase']),
             ]
@@ -525,6 +563,7 @@ def get_qrig_struct(user_data = None):
             _get_section('Middle finger', ['LeftHandMiddle1', 'LeftHandMiddle2', 'LeftHandMiddle3']),
             _get_section('Ring finger', ['LeftHandRing1', 'LeftHandRing2', 'LeftHandRing3']),
             _get_section('Pinky', ['LeftHandPinky1', 'LeftHandPinky2', 'LeftHandPinky3']),
+    
             ]
     }
     
