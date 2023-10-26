@@ -950,6 +950,10 @@ def get_textures(objs):
 
 
 def export(export_set=None, export_rig=False, cmd_string='', textures=True, only_textures=False):
+    if cmd_string and not wingcarrier.pigeons.CascadeurPigeon().can_dispatch():
+        pm.confirmDialog(message="Please launch Cascadeur, then try again.",button=['Okay'])
+        return False
+    
     #remove any previous exports
     temp_dir = pathlib.Path(os.path.join(tempfile.gettempdir(), 'mayacasc'))
     print('Cascaduer Export Location {}'.format(temp_dir))
@@ -996,6 +1000,9 @@ def export(export_set=None, export_rig=False, cmd_string='', textures=True, only
     if cmd_string:
         casc = wingcarrier.pigeons.CascadeurPigeon()
         casc.send_python_command(cmd_string)
+        
+    return True
+        
         
 
 def update_animations():

@@ -276,7 +276,7 @@ class HikExportEditor(cg3dguru.ui.Window):
             self.rig_data = self.qrig_data_instance.get_data(self.active_selection)
             
         #hide some data based on the selected data
-        self.ui.tabs.setTabVisible(1, self.rig_data is not None) #setVisible(self.rig_data is not None)
+        self.ui.tabs.setTabVisible(1, self.rig_data is not None)
         self.ui.delete_data_button.setEnabled(self.active_selection is not None)
         
         
@@ -296,6 +296,8 @@ class HikExportEditor(cg3dguru.ui.Window):
         else:
             self.ui.tabs.setCurrentWidget(self.ui.selection_tab)
             
+        self.ui.tabs.setTabVisible(0, self.active_selection is not None)
+            
         self.selection_changing = False
         self.data_Changing = False
         
@@ -312,7 +314,7 @@ class HikExportEditor(cg3dguru.ui.Window):
             return
         
         object_set = self.export_data.node()
-        selected_items = self.ui.extras_list.selectedItems()
+        selected_items = self.ui.export_list.selectedItems()
         nodes_to_remove = []
         for item in selected_items:
             node = self.extras[item.text()]
@@ -433,7 +435,6 @@ class HikExportEditor(cg3dguru.ui.Window):
         #let's activate and hide data based on our scene list
         invalid_nodes = self._get_invalid_characters()
         self.ui.add_hik_button.setEnabled(len(invalid_nodes) > 0)
-        self.ui.tabs.setTabVisible(0, self.active_selection is not None)
 #        self.ui.selected_data_group.setEnabled(self.active_selection is not None)
 
     
@@ -474,7 +475,7 @@ class HikExportEditor(cg3dguru.ui.Window):
 
         
     def _init_selection_set(self):
-        self.ui.extras_list.clear()
+        self.ui.export_list.clear()
         self.extras.clear()
         
         if not self.active_selection:
@@ -489,7 +490,7 @@ class HikExportEditor(cg3dguru.ui.Window):
                 names.append(node.name())
 
         names.sort()
-        self.ui.extras_list.addItems(names)
+        self.ui.export_list.addItems(names)
         self.ui.dynamic_set.setChecked(self.export_data.dynamicSet.get())
         
 
