@@ -1,6 +1,16 @@
 import maya.utils
 
 
+COMMAND_PORT = ':6000'
+
+def open_maya_port():
+    try:   
+        if not cmds.commandPort(COMMAND_PORT, q = True):
+            cmds.commandPort(n = COMMAND_PORT, sourceType='python')
+            print( "Opened Command Port:{0}".format(COMMAND_PORT) )
+    except:
+        print('couldnt open command port')
+
 
 def casc_setup():
     try: 
@@ -27,4 +37,5 @@ def casc_setup():
             f.write(callstack)
 
 
+open_maya_port()
 maya.utils.executeDeferred(casc_setup)
