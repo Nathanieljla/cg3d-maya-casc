@@ -878,7 +878,7 @@ class InstallerUi(QWidget):
     def __init__(self, name, module_manager, background_color = '',
                  company_logo_size = [64, 64],
                  launch_message='', 
-                 installing_message = 'Installing, please wait ...',
+                 installing_message = 'Installing\nplease wait ...',
                  failed_message='Install Failed!\nSee output.',
                  success_message="Install Completed\nSuccessfully!",
                  post_error_messsage='Install Successful.\nClean-up errored.\nSee output.', 
@@ -1216,6 +1216,36 @@ class MyInstaller(ModuleManager):
         return True
     
     
+    def casc_setup(self):
+        try: 
+            import cg3dcasc
+            print("Cascadeur: building Menu!")
+            from cg3dguru.utils import menu_maker
+            menu_maker.run(menu_namespace='cg3dcasc.menu')
+        except Exception as e:
+            import traceback
+            from pathlib import Path        
+            import maya.cmds as cmds
+            module_path = cmds.moduleInfo(path=True, moduleName='cascadeur')
+            print("\n\n")
+            print("--------------------------------------------------------")
+            print(e)
+            log = Path(module_path).parent.joinpath('cascadeur', 'scripts', 'error.log')
+            print(log)
+            callstack = traceback.format_exc()
+            print(callstack)
+            print("--------------------------------------------------------")
+            print("\n\n")
+            
+            with open(log, 'w') as f:
+                f.write(callstack)
+                
+            return False
+        
+        return True
+    
+    
+    
     def post_install(self, install_succeeded):
         #build the mod file
         success = super().post_install(install_succeeded)        
@@ -1236,11 +1266,12 @@ class MyInstaller(ModuleManager):
             
         shutil.copyfile(setup_file, dest)
 
-        #build the menu
-        import cg3dcasc.userSetup
-        cg3dcasc.userSetup.casc_setup()
+        ##build the menu
+        #import cg3dcasc.userSetup
+        #cg3dcasc.userSetup.casc_setup()
         
-        return True
+        #return True
+        return self.casc_setup()
 
     
 def main():
