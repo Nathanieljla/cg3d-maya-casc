@@ -1,3 +1,4 @@
+import maya.cmds as cmds
 import maya.utils
 
 
@@ -13,7 +14,9 @@ def open_maya_port():
 
 
 def casc_setup():
-    try: 
+    try:
+        open_maya_port()
+        
         import cg3dcasc
         print("Cascadeur: building Menu!")
         from cg3dguru.utils import menu_maker
@@ -37,5 +40,5 @@ def casc_setup():
             f.write(callstack)
 
 
-open_maya_port()
+
 maya.utils.executeDeferred(casc_setup)
