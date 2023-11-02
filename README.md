@@ -15,7 +15,9 @@ The easiest way to install this application is to ...
 2. Drag-n-drop it from the browser into a maya-viewport. 
 This will automatically install all the dependencies without requiring admin privileges into your user-directory.
 3. Hit 'Install'.  If any pop-ups appear, say "yes" or "allow".  The installer will likely take 20+ seconds.
-4. when closing Maya for the first time after installing the scripts you'll likely see a question like this (you can say 'yes' to the question):
+4. when closing Maya for the first time after installing the scripts you'll likely see a question like this:
    ![image](https://github.com/Nathanieljla/cg3d-maya-casc/assets/1466171/3c40331a-5e3b-4151-85c5-1e2127ff3f28)
+   
+ (you can say 'yes' to the question)
    
 
