@@ -1065,6 +1065,7 @@ def export_rig(new_scene, export_set):
     cmd = u"import cg3dmaya; cg3dmaya.import_scene({})".format(new_scene)
     export(export_set, True, cmd_string=cmd)
     
+    
 def smart_export():
     cmd = u"import cg3dmaya; cg3dmaya.smart_import({})".format(False)
     export(cmd_string=cmd)
