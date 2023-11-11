@@ -5,6 +5,9 @@ import os
 import pathlib
 import uuid
 
+import common.hierarchy
+import rig_gen.add_support_info as rg_s_inf
+import commands.rig_info.add_joints as aj
 import csc
 import rig_mode.on as rm_on
 import rig_mode.off as rm_off
@@ -40,12 +43,43 @@ def _get_object_by_id(object_list, maya_id):
                 return obj
         
     return None
+
+
+
+def _make_rig_info(scene, set_name, new_roots):
+    #make a rig info and select it.
+    new_selection = []
+    for root in new_roots:
+        new_selection.extend(common.hierarchy.get_object_branch_inclusive(root, root.scene.dom_scene))
+        
+    scene.edit('Change selection', lambda x: scene.select(new_selection))
+    joints = scene.get_scene_objects(of_type='Joint')
+    rig_info_node = None
     
-    
+    if joints:
+        #Maybe we should really check to make sure the joints aren't already
+        #in another rig_info node (like the official create command does)
+        #but I think my logic won't get here if that's true.
+        def make_mod(scene, set_name):
+            nonlocal rig_info_node
+            
+            new_name = set_name.replace('CSC_EXPORT', '')
+            new_name = set_name.rstrip('_')
+            rig_info_node = scene.create_object('{}_Rig'.format(new_name))
+            rig_info_beh = rig_info_node.add_behaviour('RigInfo')
+            rig_info_beh.related_joints.set(joints)
+        
+        scene.edit('Make Rig Info', make_mod, set_name)
+        
+    if rig_info_node:
+        scene.edit('Change selection', lambda x: scene.select([rig_info_node]))
+
+
 
 def _create_data(scene, set_name, maya_id, new_roots):
     global MAYA_BEHAVIOUR_NAME
-        
+     
+    #make the seleciont/object set   
     obj = scene.create_object(set_name)
     behaviour = obj.add_behaviour('Dynamic', MAYA_BEHAVIOUR_NAME)
     data_prop = behaviour.get_property('datasWithSameNamesReadonly')
@@ -182,6 +216,7 @@ def _import_maya(new_scene, import_filter: fbx.FbxFilterType):
         
         if existing_data is None:
             scene.edit('Import maya data', _create_data, set_name, maya_id, new_roots)
+            _make_rig_info(scene, set_name, new_roots)
         else:
             scene.dom_scene.info("Updated existing data")
             
@@ -207,6 +242,10 @@ def update_models():
 def update_animations():
     _import_maya(False, fbx.FbxFilterType.ANIMATION)
     
+    
+#def import_rig(new_scene):
+    #_import_maya(new_scene, fbx.FbxFilterType.MODEL)    
+    
 
 def import_scene(new_scene):
     _import_maya(new_scene, fbx.FbxFilterType.SCENE)
@@ -231,10 +270,7 @@ def _get_maya_sets(obj_list):
     
     
     
-def get_object_branch(obj, input_list):
-    pass
-    
-    
+
     
 def _export(cmd_string):
     new_object = None
@@ -279,7 +315,12 @@ def _export(cmd_string):
     for export_set in export_sets:
         root_beh = export_set.get_behaviour_by_name(MAYA_ROOTS)
         roots = [beh.object for beh in root_beh.behaviours.get()]
-        scene.edit('Change selection', lambda x: scene.select(roots))
+        
+        new_selection = []
+        for root in roots:
+            new_selection.extend(common.hierarchy.get_object_branch_inclusive(root, root.scene.dom_scene))
+            
+        scene.edit('Change selection', lambda x: scene.select(new_selection))
 
         maya_beh =root_beh.get_siblings_by_name(MAYA_BEHAVIOUR_NAME)[0]
         maya_id = maya_beh.datasWithSameNamesReadonly.get_by_name('maya_id')[0]
@@ -288,12 +329,15 @@ def _export(cmd_string):
         
         print("Exporting to {}".format(fbx_name))
         #TODO: Change this to selection, once we know how to select a branch
-        fbx.export_fbx(export_path, fbx.FbxFilterType.SCENE)
+        fbx.export_fbx(export_path, fbx.FbxFilterType.SELECTED) #fbx.FbxFilterType.SCENE)
         
  
     import wingcarrier.pigeons
     maya = wingcarrier.pigeons.MayaPigeon()    
     maya.send_python_command(cmd_string)
+    
+    ##something isn't working here
+    #scene.edit('Reset selection', lambda x: scene.select(list(selected)))
  
         
         

@@ -1042,80 +1042,12 @@ class MyInstaller(ModuleManager):
             else:
                 child.unlink() #missing_ok=True) #missing_ok doens't work for maya 2022
                 
-                
-    #@staticmethod         
-    #def get_registered_path():
-        #"""Find the install path of cascadeur from the registry"""
-        #casc_path = None
-        
-        #if platform.platform().lower().startswith('windows'):
-            #import winreg
-        #else:
-            #return None
-        
-        #try:
-            #access_registry = winreg.ConnectRegistry(None,winreg.HKEY_CLASSES_ROOT)
-            #access_key = winreg.OpenKey(access_registry, r"Cascadeur\shell\open\command")
-            #casc_path = winreg.QueryValue(access_key, None)
-        #except Exception as e:
-            #print("Couldn't find the EXE in winreg. Let's look at this case! Error:{}".format(e))
             
-        #return casc_path
-            
-
         
     def pre_install(self):        
         super().pre_install()
-        #try:
-            ##DON'T PUT THIS IN THE INSTALL(), because install is inside of a thread
-            ##and the confirm and file dialog boxes will blow Maya up!
-            
-            ##We now need to update the app.settings.json Find the exe path,
-            ##if we can't find it, lets ask the user for it
-            #exe_path = None #MyInstaller.get_registered_path()
-            #print("Cascadeur exe path: {}".format(exe_path))
-            #if not exe_path:
-                #result = maya.cmds.confirmDialog( title='Help Me find Cascadeur', message='I need your help finding the Cascadeur.exe\n\nAdmin priveleges will be required. Okay?', button=['Yes','No'], defaultButton='Yes', cancelButton='No', dismissString='No' )
-                #if result != 'Yes':                
-                    #raise Exception("Couldn't locate a valid installation of Cascadeur!")
-                
-                #singleFilter = "exe (cascadeur.exe)"
-                #exe_path = maya.cmds.fileDialog2(caption ='Locate Cascadeur EXE', fileFilter=singleFilter, dialogStyle=1,fileMode =1)
-                
-                #if not exe_path:
-                    #raise Exception("Couldn't locate a valid installation of Cascadeur!")
-                #else:
-                    #exe_path = exe_path[0]
 
-            ##Let's edit the json
-            #exe = pathlib.Path(exe_path)
-            #settings_file: pathlib.Path = exe.parent.joinpath('resources/settings.json')
-            #if not settings_file.exists():
-                #raise Exception("Couldn't locate a valid settings.json !")
-            
-            #if settings_file.exists():
-                #settings = open(settings_file)
-                #data = json.load(settings)
-                #settings.close()
-                
-                #if 'cg3dcmds' not in data['Python']['Commands']:
-                    #data['Python']['Commands'].append('cg3dcmds')
-    
-                #read_state = os.stat(settings_file).st_mode
-                #os.chmod(settings_file, stat.S_IWRITE)
-                
-                #settings = open(settings_file, 'w')
-                #json.dump(data, settings, indent = 4)
-                #settings.close()
-        
-                #os.chmod(settings_file, read_state)
-                
-        #except Exception as e:
-            #print(e)
-            #return False
-        
-
-        #let's frist install platformdirs so we can make a spot for out
+        #let's frist install platformdirs so we can make a spot for our
         #cascaduer code. Once we determined the path, we'll clear the scripts
         #folder of all the garbage platformdirs added.        
         pip_args = [r'--target={0}'.format(self.scripts_path)]
@@ -1147,7 +1079,7 @@ class MyInstaller(ModuleManager):
             self.my_data_dir.mkdir(parents=True)
         
         pip_args = [r'--target={0}'.format(self.my_data_dir)]
-        Commandline.pip_install('https://github.com/Nathanieljla/cg3d-casc-core/archive/refs/heads/main.zip', pip_args=pip_args)
+        Commandline.pip_install('cg3d-casc-core', pip_args=pip_args) #'https://github.com/Nathanieljla/cg3d-casc-core/archive/refs/heads/main.zip', pip_args=pip_args)
         Commandline.pip_install('wing-carrier', pip_args=pip_args)     
 
         self.clean_folder(self.scripts_path)
@@ -1264,10 +1196,6 @@ class MyInstaller(ModuleManager):
             dest.unlink()
             
         shutil.copyfile(setup_file, dest)
-
-        ##build the menu
-        #import cg3dcasc.userSetup
-        #cg3dcasc.userSetup.casc_setup()
         
         #return True
         return self.casc_setup()
