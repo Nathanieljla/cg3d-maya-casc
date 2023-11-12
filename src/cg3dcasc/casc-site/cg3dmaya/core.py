@@ -94,9 +94,15 @@ def _create_data(scene, set_name, maya_id, new_roots):
     
 def _get_modified_filter(existing_data, qrig_path, import_filter: fbx.FbxFilterType):
     if import_filter == fbx.FbxFilterType.ANIMATION:
-        return fbx.FbxFilterType.ANIMATION
+        if not existing_data:
+            return fbx.FbxFilterType.SKIP
+        else:
+            return fbx.FbxFilterType.ANIMATION
     elif import_filter == fbx.FbxFilterType.MODEL:
-        return fbx.FbxFilterType.MODEL
+        if not existing_data:
+            return fbx.FbxFilterType.MODEL
+        else:
+            return fbx.FbxFilterType.SKIP
     elif import_filter == fbx.FbxFilterType.SCENE:
         return fbx.FbxFilterType.SCENE
     elif import_filter == fbx.FbxFilterType.AUTO:
@@ -151,7 +157,8 @@ def _load_textures(scene):
                     obj.TextureContainer.texture_paths.add(data.id)
                     
                 obj.MeshObject.textures.set(obj.TextureContainer)
-                    
+     
+    #mod(scene)               
     scene.edit("Load Textures", mod)
     
     
@@ -205,18 +212,33 @@ def _import_maya(new_scene, import_filter: fbx.FbxFilterType):
         modified_filter = _get_modified_filter(existing_data, qrig_path, import_filter)
         
         if modified_filter != fbx.FbxFilterType.SKIP:
+            #To-Do: Find a way to make this update the mesh for exsting data
+            #
+            #if existing_data and modified_filter == fbx.FbxFilterType.MODEL:
+                ##selecting the existing data before importing a model should
+                ##just update the mesh...I think.
+                #root_beh = existing_data.get_behaviour_by_name(MAYA_ROOTS)
+                #roots = [beh.object for beh in root_beh.behaviours.get()]
+                
+                #new_selection = []
+                #for root in roots:
+                    #new_selection.extend(common.hierarchy.get_object_branch_inclusive(root, root.scene.dom_scene))
+                    
+                #scene.edit('Change selection', lambda x: scene.select(new_selection))
+                
             fbx.import_fbx(fbx_path, modified_filter)
+            
+            current_roots = set(scene.get_scene_objects(only_roots=True))
+            new_roots = current_roots.difference(scene_roots)
+            scene_roots = current_roots               
 
 
         #Let's find the stuff that was just imported and create a way
         #to search for it later.
-        current_roots = set(scene.get_scene_objects(only_roots=True))
-        new_roots = current_roots.difference(scene_roots)
-        scene_roots = current_roots
-        
-        if existing_data is None:
+        if existing_data is None and modified_filter != fbx.FbxFilterType.SKIP:
             scene.edit('Import maya data', _create_data, set_name, maya_id, new_roots)
-            _make_rig_info(scene, set_name, new_roots)
+            if qrig_path:
+                _make_rig_info(scene, set_name, new_roots)
         else:
             scene.dom_scene.info("Updated existing data")
             
@@ -234,7 +256,7 @@ def _import_maya(new_scene, import_filter: fbx.FbxFilterType):
         _import_maya_qrig_file(import_rig)
             
      
-            
+        
 def update_models():
     _import_maya(False, fbx.FbxFilterType.MODEL)
     
@@ -243,8 +265,8 @@ def update_animations():
     _import_maya(False, fbx.FbxFilterType.ANIMATION)
     
     
-#def import_rig(new_scene):
-    #_import_maya(new_scene, fbx.FbxFilterType.MODEL)    
+def import_rig(new_scene):
+    _import_maya(new_scene, fbx.FbxFilterType.MODEL)    
     
 
 def import_scene(new_scene):
@@ -267,8 +289,6 @@ def update_textures():
 def _get_maya_sets(obj_list):
     return [obj for obj in obj_list if
             obj.get_behaviour_by_name(MAYA_BEHAVIOUR_NAME) is not None]
-    
-    
     
 
     
