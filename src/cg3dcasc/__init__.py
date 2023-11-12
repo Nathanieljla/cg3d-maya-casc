@@ -1,5 +1,5 @@
 from .core import *
-
+from . import hik
 
 VERSION = (1, 0, 0)
 
