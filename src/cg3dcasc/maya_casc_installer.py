@@ -1090,7 +1090,7 @@ class MyInstaller(ModuleManager):
     
 
     def get_remote_package(self):
-        return 'https://github.com/Nathanieljla/cg3d-maya-casc/archive/refs/heads/main.zip'
+        return 'cg3d-maya-casc' #https://github.com/Nathanieljla/cg3d-maya-casc/archive/refs/heads/main.zip'
     
     
     def install(self):
