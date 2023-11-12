@@ -1,6 +1,8 @@
-![maya2024](https://img.shields.io/badge/Maya2024-tested-brightgreen.svg)
-![maya2023](https://img.shields.io/badge/Maya2023-tested-brightgreen.svg)
-![maya2022](https://img.shields.io/badge/Maya2022-tested-brightgreen.svg)
+![maya2024](https://img.shields.io/badge/Maya_2024-tested-brightgreen.svg)
+![maya2023](https://img.shields.io/badge/Maya_2023-tested-brightgreen.svg)
+![maya2022](https://img.shields.io/badge/Maya_2022-tested-brightgreen.svg)
+
+![casc](https://img.shields.io/badge/Cascadeur_2023.2+-required-red.svg)
 
 ![Windows](https://img.shields.io/badge/Windows-tested-blue)
 
