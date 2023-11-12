@@ -3,7 +3,7 @@
 ![maya2022](https://img.shields.io/badge/Maya2022-tested-brightgreen.svg)
 
 
-#This is used to publish to test.pypi.org.  Please see the main branch.
+#This is used to publish to pypi.org.  Please see the main branch.
 
 
 # cg3d-maya-casc
