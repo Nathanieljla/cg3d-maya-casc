@@ -2,6 +2,8 @@
 ![maya2023](https://img.shields.io/badge/Maya2023-tested-brightgreen.svg)
 ![maya2022](https://img.shields.io/badge/Maya2022-tested-brightgreen.svg)
 
+![Windows](https://img.shields.io/badge/Windows-blue)
+
 
 #This is used to publish to pypi.org.  Please see the main branch.
 
