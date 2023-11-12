@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cg3d-maya-casc"
-version = "0.8.0"
+version = "0.9.9rc1"
 authors = [
   { name="Nathaniel A", email="developer@3dcg.guru" },
 ]

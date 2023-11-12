@@ -1117,10 +1117,12 @@ def import_fbx():
             scene_roots = current_roots
             
             if matching_export is None:
+                print("Adding new casc objects: {}".format(new_roots))
                 new_node, data = CascExportData.create_node(nodeType='objectSet')
-                new_node.addMembers(new_roots)
                 pm.rename(new_node, set_name)
-                
+                if new_roots:
+                    new_node.addMembers(new_roots)
+
                 data.cscDataId.unlock()
                 data.cscDataId.set(maya_id)
                 data.cscDataId.lock()                

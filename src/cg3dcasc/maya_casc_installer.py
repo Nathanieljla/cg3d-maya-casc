@@ -1154,6 +1154,9 @@ class MyInstaller(ModuleManager):
             print("Cascadeur: building Menu!")
             from cg3dguru.utils import menu_maker
             menu_maker.run(menu_namespace='cg3dcasc.menu')
+            import cg3dcasc.userSetup
+            cg3dcasc.userSetup.open_maya_port()
+            
         except Exception as e:
             import traceback       
             #import maya.cmds as cmds

@@ -332,11 +332,25 @@ class HikExportEditor(cg3dguru.ui.Window):
             return              
         
         object_set = self.export_data.node()
+        
+        #special case for if someone adds the hikCharacterNode to an existing object set
+        added_character_node = False
+        selected_character_nodes = pm.ls(sl=True, type='HIKCharacterNode')
+        invalid_nodes = self._get_invalid_characters()
+        if selected_character_nodes and len(selected_character_nodes) == 1 and selected_character_nodes[0] in invalid_nodes:
+            data = self.qrig_data_instance.add_data(object_set)
+            selected_character_nodes[0].message >> data.characterNode
+            added_character_node = True
+            
         selection = pm.ls(sl=True,type=['transform','joint', 'skinCluster', 'mesh'])
         if selection:
             object_set.addMembers(selection)
                     
-        self._init_selection_set()
+        if added_character_node:
+            self._init_ui(True, False)
+        else:
+            self._init_selection_set()
+            
         
         
     def on_clear_weapon(self, weapon):
