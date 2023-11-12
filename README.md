@@ -4,10 +4,6 @@
 
 ![Windows](https://img.shields.io/badge/Windows-blue)
 
-
-#This is used to publish to pypi.org.  Please see the main branch.
-
-
 # cg3d-maya-casc
 Easily bridge data between Maya and Cascadeur with this Maya Module.
 
