@@ -2,6 +2,10 @@
 ![maya2023](https://img.shields.io/badge/Maya2023-tested-brightgreen.svg)
 ![maya2022](https://img.shields.io/badge/Maya2022-tested-brightgreen.svg)
 
+
+#This is used to publish to test.pypi.org.  Please see the main branch.
+
+
 # cg3d-maya-casc
 Easily bridge data between Maya and Cascadeur with this Maya Module.
 
