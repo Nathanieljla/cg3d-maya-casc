@@ -9,7 +9,7 @@
 # cg3d-maya-casc
 Easily bridge data between Maya and Cascadeur with this Maya Module.
 
-[Youtube video on how to use](https://www.youtube.com/watch?v=z0PIIlQyxMI)
+[Youtube video on how to use](https://youtu.be/BQiqKtXEmP4)
 
 # Installation
 
