@@ -9,7 +9,7 @@ import psutil
 import pathlib
 
 import pymel.core as pm
-
+from . import hik
 
 import wingcarrier.pigeons
 import cg3dguru.udata
@@ -900,12 +900,19 @@ def get_exportable_content(export_data):
 def _export_data(export_data, export_folder: pathlib.Path, export_rig: bool, export_fbx: bool):    
     #When export_fbx and export_rig are both false
     #then this function is still useful as it will
-    #as it still returns a list of exportable_content
+    #still returns a list of exportable_content
     qrig_data = QRigData.get_data(export_data.node())
     character_node = get_character_node(export_data)
     root_transforms =  get_exportable_content(export_data)
     
     if export_fbx:
+        #Hik should be exported from the stand position only when
+        #exporting a rig
+        current_source = None
+        if export_rig and character_node:
+            current_source = hik.get_character_source(character_node)
+            hik.set_character_source(character_node, hik.SourceType.STANCE)
+        
         user_selection = pm.ls(sl=True)
         pm.select(list(root_transforms), replace=True)
         
@@ -917,6 +924,9 @@ def _export_data(export_data, export_folder: pathlib.Path, export_rig: bool, exp
         cg3dguru.animation.fbx.export(filename = fbx_file_path)
         
         pm.select(user_selection, replace=True)
+        
+        if export_rig and character_node:
+            hik.set_character_source(character_node, current_source)
 
     if export_rig and character_node:
         qrig_file_path = ''
@@ -1091,6 +1101,7 @@ def get_import_files():
 
 
 def import_fbx():
+    print('Casc import called')
     files = get_import_files()
     
     scene_sets = pm.ls(type='objectSet')
@@ -1103,20 +1114,29 @@ def import_fbx():
 
         set_name, maya_id = key.split('.')
         if fbx_path:
-            cg3dguru.animation.fbx.import_fbx(fbx_path)
-            current_roots = set(pm.ls(assemblies=True))
-
-            matching_export = None
+            matching_id_node = None
             for node in existing_exports:
                 if node.cscDataId.get() == maya_id:
-                    matching_export = node
-                    break
+                    matching_id_node = node
+                    break            
+            
+            #switch any hik character to None, so we can see the animation
+            character_node = None
+            if matching_id_node:
+                character_node = get_character_node(matching_id_node.cscDataId)
+            if character_node:
+                hik.set_character_source(character_node, hik.SourceType.NONE)
+            
+            #Import the FBX data
+            print('importing {}'.format(fbx_path))
+            cg3dguru.animation.fbx.import_fbx(fbx_path)
+            current_roots = set(pm.ls(assemblies=True))
 
             #should we always update with the latest roots?
             new_roots = current_roots.difference(scene_roots)
             scene_roots = current_roots
             
-            if matching_export is None:
+            if matching_id_node is None:
                 print("Adding new casc objects: {}".format(new_roots))
                 new_node, data = CascExportData.create_node(nodeType='objectSet')
                 pm.rename(new_node, set_name)
