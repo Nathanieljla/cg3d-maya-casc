@@ -2,10 +2,10 @@
 import json
 import tempfile
 import os
-import typing
+#import typing
 import uuid
-import winreg
-import psutil
+#import winreg
+#import psutil
 import pathlib
 
 import pymel.core as pm
@@ -21,8 +21,6 @@ import cg3dguru.utils
 class SpineException(Exception):
     """Thrown when an export is attempted without an upper spine bone defined"""
     pass
-
-
 
 #https://forums.autodesk.com/t5/maya-programming/python-hik/td-p/4262564
 #https://mayastation.typepad.com/maya-station/2011/04/maya-2012-hik-menus-and-mel-commands-part-1.html
