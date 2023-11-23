@@ -80,7 +80,7 @@ def set_character(character):
         pm.mel.eval('hikUpdateContextualUI()')    
     
 
-def set_character_source(character, source: SourceType|str):
+def set_character_source(character, source: SourceType):
     """Set the HIK UI to a specific character and source"""
     character_list, source_list = _get_hik_windows()        
     character_name = _get_character_name(character)
