@@ -7,5 +7,6 @@ ORDER = [
     'quick_export',
     'update',
     'send_to',
-    'editor'
+    'editor',
+    'preferences'
 ]

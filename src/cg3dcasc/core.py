@@ -10,6 +10,7 @@ import pathlib
 
 import pymel.core as pm
 from . import hik
+from . import preferences
 
 import wingcarrier.pigeons
 import cg3dguru.udata
@@ -919,7 +920,15 @@ def _export_data(export_data, export_folder: pathlib.Path, export_rig: bool, exp
         filename = '{}.{}.fbx'.format(node_name, file_id)
         fbx_file_path = export_folder.joinpath(filename)
         print('FBX file: {}'.format(fbx_file_path))
-        cg3dguru.animation.fbx.export(filename = fbx_file_path)
+        
+        
+        prefs = preferences.get()
+        bake = prefs.bake_animations == preferences.OptionEnum.ALWAYS
+        if prefs.bake_animations == preferences.OptionEnum.ASK:
+            result = pm.confirmDialog(title='Export Animations', message='Bake Animation?', messageAlign='center', button=['Yes', 'No'], defaultButton='Yes', cancelButton='No', dismissString='No')
+            bake = result == 'Yes'
+        
+        cg3dguru.animation.fbx.export(fbx_file_path, bake_animations=bake)
         
         pm.select(user_selection, replace=True)
         
@@ -966,6 +975,7 @@ def get_textures(objs):
     materials = {}
     
     shapes = pm.listRelatives(objs, s=True)
+    shapes += pm.ls(objs, shapes=True)
     for shape in shapes:
         sgs = pm.listConnections(shape, type='shadingEngine' )
         for sg in sgs:
