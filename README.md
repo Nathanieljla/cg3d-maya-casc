@@ -33,8 +33,18 @@ This will automatically install all the dependencies without requiring admin pri
  (you can say 'yes' to the question)
 
  # Revisions
+ ### 1.1.0
  
- 1.0.1
- Bug fixes for Maya 2022
+ Updated the installer to support upgrading if a previous install is found.
+ 
+ Added a preferences menu.
+ 
+ Added support for exporting sparse key data.
+ 
+ Fixed textures not being sent to Cascadeur in certain situations.
+ 
+ ### 1.0.1
+ 
+ Bug fixes for Maya 2022.
    
 
