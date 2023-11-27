@@ -31,5 +31,10 @@ This will automatically install all the dependencies without requiring admin pri
    ![image](https://github.com/Nathanieljla/cg3d-maya-casc/assets/1466171/3c40331a-5e3b-4151-85c5-1e2127ff3f28)
    
  (you can say 'yes' to the question)
+
+ # Revisions
+ 
+ 1.0.1
+ Bug fixes for Maya 2022
    
 
