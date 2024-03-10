@@ -18,9 +18,9 @@ from PySide6.QtGui import (QBrush, QColor, QConicalGradient, QCursor,
 from PySide6.QtWidgets import (QApplication, QGridLayout, QGroupBox, QHBoxLayout,
     QLabel, QLineEdit, QProgressBar, QPushButton,
     QRadioButton, QSizePolicy, QSpacerItem, QTextEdit,
-    QVBoxLayout, QWidget, QWizard, QWizardPage)
+    QVBoxLayout, QWidget, QWizard)
 
-from installer.promotes import PathsPage
+from installer.promotes import (LastPage, PathsPage)
 
 class Ui_Wizard(object):
     def setupUi(self, Wizard):
@@ -28,7 +28,7 @@ class Ui_Wizard(object):
             Wizard.setObjectName(u"Wizard")
         Wizard.resize(664, 632)
         Wizard.setWizardStyle(QWizard.ModernStyle)
-        Wizard.setOptions(QWizard.HelpButtonOnRight|QWizard.NoBackButtonOnStartPage|QWizard.NoCancelButton)
+        Wizard.setOptions(QWizard.HelpButtonOnRight|QWizard.NoBackButtonOnLastPage|QWizard.NoBackButtonOnStartPage|QWizard.NoCancelButton)
         self.wizardPage1 = PathsPage()
         self.wizardPage1.setObjectName(u"wizardPage1")
         self.verticalLayout_2 = QVBoxLayout(self.wizardPage1)
@@ -222,7 +222,7 @@ class Ui_Wizard(object):
         self.verticalLayout_2.addLayout(self.action_group)
 
         Wizard.addPage(self.wizardPage1)
-        self.wizardPage2 = QWizardPage()
+        self.wizardPage2 = LastPage()
         self.wizardPage2.setObjectName(u"wizardPage2")
         self.verticalLayout = QVBoxLayout(self.wizardPage2)
         self.verticalLayout.setObjectName(u"verticalLayout")

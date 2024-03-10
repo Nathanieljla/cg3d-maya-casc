@@ -1,4 +1,10 @@
+import os
 import sys
+import subprocess
+import shutil
+import stat
+import traceback
+
 #import pathlib
 from pathlib import Path
 import winreg
@@ -13,7 +19,6 @@ from PySide6.QtWidgets import *
 from PySide6.QtGui import *
 from PySide6.QtUiTools import *
 
-
 from installer.installer_ui import Ui_Wizard
 
 #pyside6-uic D:\Users\Anderson\Documents\github\cg3d-maya-casc\src\installer\installer.ui -o D:\Users\Anderson\Documents\github\cg3d-maya-casc\src\installer\installer_ui.py
@@ -21,7 +26,6 @@ from installer.installer_ui import Ui_Wizard
 
 
 def get_cascadeur_settings_path():
-    import os
     local_dir = Path(os.getenv('LOCALAPPDATA'))
     settings_json = local_dir.joinpath('Nekki Limited', 'cascadeur', 'settings.json')
     
@@ -76,7 +80,6 @@ def get_maya_installs():
             pass
             #print(f"failed {e}: Maya Version->{version}")
             
-            
     return maya_installs
          
 
@@ -113,8 +116,7 @@ def get_module_info(mayapy_path:Path)->Path:
     #https://stackoverflow.com/questions/69393513/send-commands-to-cmd-prompt-using-python-subprocess-module
     #https://www.datacamp.com/tutorial/python-subprocess
     #https://stackoverflow.com/questions/44206813/how-to-convert-function-to-str-for-python
-    import subprocess
-    
+
     #cmd = pip_cmd.format(module_name)
     #print(cmd)
     
@@ -171,18 +173,200 @@ def process_id(process_name):
 
 
 
-def install_repair(casc_json: Path, casc_install: Path, mayapy: Path,
-                  mode_file: Path, maya_install: Path, dev):
+def get_default_casc_install():
+    local_dir = Path(os.getenv('LOCALAPPDATA'))
+    return local_dir.joinpath('CG_3D_Guru', 'Cascadeur')
+
+
+def get_default_mod_file_path():
+    docs_path = get_user_docs_path()
+    return docs_path.joinpath('maya', 'modules', 'cascadeur.mod')
+
+def get_default_maya_install_path():
+    docs_path = get_user_docs_path()
+    return docs_path.joinpath('maya', 'modules', 'cascadeur')
     
-    update_casc = casc_install.joinpath('cg3dguru').exists()
-    if update_casc:
-        print("Updating/Reparing cascadeur packages")
-        pass
+
+
+class Updater(QThread):
+    update_complete = Signal(bool)
+    
+    def __init__(self, casc_json: Path, casc_install: Path, mayapy: Path,
+                 mod_file: Path, maya_install: Path, dev, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        self._loop = True        
+        self.dev = dev
+        self.casc_json = casc_json
+        self.mayapy = mayapy
+        self.casc_install = casc_install if casc_install.is_absolute() else get_default_casc_install()
+        self.mod_file = mod_file if mod_file.is_absolute() else get_default_mod_file_path()
+        self.maya_install = maya_install if maya_install.is_absolute() else get_default_maya_install_path()  
+
+    @Slot()
+    def quit(self):
+        self._loop = False
+      
+    @Slot()
+    def exit(self, retcode=0):
+        super().exit(retcode=retcode)
+        self._loop = False
+        
+    def _run_pip(self, cmds):
+        print(cmds)
+        process = subprocess.Popen(cmds, shell=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        while process.poll() is None and self._loop:
+            nextline = process.stdout.readline()
+            nextline = nextline.strip()
+            if nextline:
+                print(nextline.decode())
+                
+            nextline = process.stderr.readline()
+            nextline = nextline.strip()
+            if nextline:
+                print(nextline.decode())        
+
+
+    def _run(self):
+        #install maya packages
+        source_prefs = None
+        backup_prefs = None
+        print("\nINSTALLING MAYA PACKAGES")
+        print("*****************************************************")
+        maya_install_path = self.maya_install
+        package = 'cg3d-maya-casc'
+        
+        if self.dev:
+            maya_install_path = Path(r'D:/Users/Anderson/Pictures/trash/casc_install/maya_packages')
+            package = r'https://github.com/Nathanieljla/cg3d-maya-casc/archive/refs/heads/main.zip'
+            
+        maya_scripts_path = maya_install_path.joinpath('scripts')
+        if not maya_scripts_path.exists():
+            os.makedirs(maya_install_path)
+            
+        if maya_scripts_path.exists():
+            source_prefs = maya_scripts_path.joinpath('cg3dcasc', 'preferences', 'prefs.pickle')
+            if source_prefs.exists():
+                print("Backing up prefs")
+                backup_prefs = Path().absolute().joinpath('prefs.pickle')
+                try:
+                    shutil.copyfile(source_prefs, backup_prefs)
+                except Exception as e:
+                    print(f"Failed to backup preferences:{e}")
+                    backup_prefs = None
+            
+            
+            cmds = [str(self.mayapy), '-m', 'pip', 'install', package, f'--target={str(maya_scripts_path)}', '--upgrade', '--force-reinstall']
+            self._run_pip(cmds)
+            source = maya_scripts_path.joinpath('cg3dcasc', 'usersetup.py')
+            dest = maya_scripts_path.joinpath('usersetup.py')
+            if not source.exists():
+                print(f"Can't find user setup file:{source}")
+            else:
+                shutil.copyfile(source, dest)
+            
+        else:
+            print(f"could't make directory:{maya_scripts_path}")
+            
+        if backup_prefs and backup_prefs.exists():
+            try:
+                shutil.copyfile(backup_prefs, source_prefs)
+            except Exception as e:
+                print(f"Failed to restore preferences:{e}")
+                backup_prefs = None
+            
+        #install cascadeur packages
+        print("\nINSTALLING CASCADEUR PACKAGES")
+        print("*****************************************************")
+        casc_install_path = self.casc_install #.joinpath('cg3dguru')
+        package = 'cg3d-casc-core'
+        if self.dev:
+            casc_install_path = Path(r'D:/Users/Anderson/Pictures/trash/casc_install/casc_packages')
+            package = r'https://github.com/Nathanieljla/cg3d-casc-core/archive/refs/heads/main.zip'
+            
+        if not casc_install_path.exists():
+            os.makedirs(casc_install_path)
+         
+        if casc_install_path.exists(): 
+            cmds = [str(self.mayapy), '-m', 'pip', 'install', package, f'--target={str(casc_install_path)}', '--upgrade', '--force-reinstall']
+            self._run_pip(cmds)
+    
+            package = 'wing-carrier'
+            cmds = [str(self.mayapy), '-m', 'pip', 'install', package, f'--target={str(casc_install_path)}', '--upgrade', '--force-reinstall']
+            self._run_pip(cmds)
+        else:
+            print(f"could't make directory:{casc_install_path}")
+            
+        print("WRAPPING STUFF UP")
+        print("*****************************************************")
+        #copy maya specific commands to cascadeur
+        casc_site = maya_scripts_path.joinpath('cg3dcasc/casc-site')
+        if casc_site.exists() and casc_install_path.exists():
+            print("COPYING MAYA COMMANDS TO CASCADEUR".lower().capitalize())
+            for child in casc_site.iterdir():
+                dest = casc_install_path.joinpath(child.name)
+                if dest.exists():
+                    shutil.rmtree(str(dest))
+
+                shutil.copytree(child, dest)
+                
+        #Let's update the Cascadeur settings to see the new packages
+        #settings_file = self.nekki_dir.joinpath('settings.json')
+        if self.casc_json.exists():
+            print("MODIFYING CASCADEUR SETTINGS JSON".lower().capitalize())
+            settings = open(self.casc_json)
+            data = json.load(settings)
+            settings.close()
+
+            target_string = str(casc_install_path)
+            #casc requires paths to be forward slashes
+            target_string = target_string.replace("\\", "/")
+            if target_string not in data['Python']['Path']:
+                data['Python']['Path'].append(target_string)
+                
+            if 'cg3dcmds' not in data['Python']['Commands']:
+                data['Python']['Commands'].append('cg3dcmds')
+
+            read_state = os.stat(self.casc_json).st_mode
+            os.chmod(self.casc_json, stat.S_IWRITE)
+            
+            settings = open(self.casc_json, 'w')
+            formatted_json = json.dumps(data, indent = 4)
+            settings.write(formatted_json)
+            settings.close()
+    
+            os.chmod(self.casc_json, read_state)
+            
+
+    def run(self):
+        print("*****************************************************")
+        print(f"Python exe:  {self.mayapy}\n")
+        print(f"CASC Settings:  {self.casc_json}")
+        print(f"CASC Packages Folder:  {self.casc_install}\n")
+
+        print(f"MAYA Mod File:  {self.mod_file}")
+        print(f"MAYA Module Folder:  {self.maya_install}")
+        print("*****************************************************\n")
+        
+        try:
+            self._run()
+            print("*****************************************************")
+            print("INSTALL COMPLETED SUCCESSFULLY !!")
+            print("*****************************************************")
+            self.update_complete.emit(True)
+        except Exception as e:
+            print("\n")
+            print("*****************************************************")
+            print(f"Installing FAILED !! : {e}")          
+            print("*****************************************************")
+            callstack = traceback.format_exc()
+            print(callstack)            
+            self.update_complete.emit(False)
     
     
     
 def remove(casc_json: Path, casc_install: Path, mayapy: Path,
-                  mode_file: Path, maya_install: Path, dev):
+                  mod_file: Path, maya_install: Path, dev):
     if dev:
         print("remove dev")
         return
@@ -329,6 +513,8 @@ class MainWindow(QWizard):
         self.module_editor = ModuleEditor()
 
         self.page_one_init = False
+        self.page_two = None
+        
         self.casc_json_path = Path()
         self.casc_module_path = Path()        
         
@@ -342,6 +528,7 @@ class MainWindow(QWizard):
         self.searching = False
         self.threadpool = QThreadPool()
         self.path_finder = PathFinder()
+        self.running_thread: QThread = None
 
         self.ui.casc_json_set.pressed.connect(lambda: self.get_file(
             PathType.CASC_JSON, self.ui.casc_json_value, self.read_casc_settings, "JSON (*.json)")
@@ -364,6 +551,9 @@ class MainWindow(QWizard):
         self.ui.find_module_button.pressed.connect(self.find_modules)
         self.logger.log_output.connect(self.log)
         self.ui.console_spacer.setVisible(False)
+
+        
+        
         
         
     def read_mod_file(self):
@@ -664,25 +854,47 @@ class MainWindow(QWizard):
         self.update_status()
         
         
+    def install_complete(self, result):
+        self.page_two.mark_complete()
+        
+        
+    def init_page_two(self):
+        if self.page_two is None:
+            self.page_two = self.currentPage()
+            self.page_two.set_parent(self)
+
+        
+        if self.running_thread is not None and self.running_thread.isRunning():
+            return
+        
+        if self.ui.install_option.isChecked():
+            self.running_thread = Updater(self.casc_json_path, self.casc_module_path,
+                           self.mayapy_path, self.maya_mod_file_path,
+                           self.maya_mod_install_path, self.dev_install)
+            
+            self.running_thread.update_complete.connect(self.install_complete)
+            self.running_thread.start()
+        else:
+            remove(self.casc_json_path, self.casc_module_path,
+                   self.mayapy_path, self.maya_mod_file_path,
+                   self.maya_mod_install_path, self.dev_install)
+        
+        
     def initializePage(self, page_id):
         if page_id == 0:
             self.output_window = self.ui.console_output
             self.init_page_one()
         if page_id == 1:
             self.output_window = self.ui.result_output
+            self.output_window.clear()
             continue_install = self.check_running_apps()
             if not continue_install:
                 print('Install Canceled')
                 return
             
-            if self.ui.install_option.isChecked():
-                install_repair(self.casc_json_path, self.casc_module_path,
-                               self.mayapy_path, self.maya_mod_file_path,
-                               self.maya_mod_install_path, self.dev_install)
-            else:
-                remove(self.casc_json_path, self.casc_module_path,
-                       self.mayapy_path, self.maya_mod_file_path,
-                       self.maya_mod_install_path, self.dev_install)
+            self.init_page_two()
+            
+
 
                 
             

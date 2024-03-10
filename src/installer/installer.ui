@@ -17,7 +17,7 @@
    <enum>QWizard::ModernStyle</enum>
   </property>
   <property name="options">
-   <set>QWizard::HelpButtonOnRight|QWizard::NoBackButtonOnStartPage|QWizard::NoCancelButton</set>
+   <set>QWizard::HelpButtonOnRight|QWizard::NoBackButtonOnLastPage|QWizard::NoBackButtonOnStartPage|QWizard::NoCancelButton</set>
   </property>
   <widget class="PathsPage" name="wizardPage1">
    <property name="title">
@@ -310,7 +310,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
     </item>
    </layout>
   </widget>
-  <widget class="QWizardPage" name="wizardPage2">
+  <widget class="LastPage" name="wizardPage2">
    <property name="title">
     <string>Install Status</string>
    </property>
@@ -324,6 +324,12 @@ li.checked::marker { content: &quot;\2612&quot;; }
  <customwidgets>
   <customwidget>
    <class>PathsPage</class>
+   <extends>QWizardPage</extends>
+   <header>installer.promotes</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>LastPage</class>
    <extends>QWizardPage</extends>
    <header>installer.promotes</header>
    <container>1</container>
