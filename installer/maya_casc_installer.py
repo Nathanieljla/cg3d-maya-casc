@@ -190,16 +190,22 @@ def get_cascadeur_settings_path():
     return settings_json
 
 
+class InstallType(enum.IntEnum):
+    RELEASE = enum.auto()
+    TEST_RELEASE = enum.auto()
+    GIT = enum.auto()
+    
+
 
 class Updater(QThread):
     update_complete = Signal(bool)
     
     def __init__(self, casc_json: Path, casc_install: Path, mayapy: Path,
-                 mod_file: Path, maya_install: Path, dev, *args, **kwargs):
+                 mod_file: Path, maya_install: Path, install_type, *args, **kwargs):
         super().__init__(*args, **kwargs)
         
-        self._loop = True        
-        self.dev = dev
+        self._loop = True
+        self.install_type = install_type
         self.casc_json = casc_json
         self.mayapy = mayapy
         self.casc_install = casc_install if casc_install.is_absolute() else get_default_casc_install()
@@ -238,9 +244,7 @@ class Updater(QThread):
         print("*****************************************************")
         maya_install_path = self.maya_install
         package = 'cg3d-maya-casc'
-        
-        if self.dev:
-            #maya_install_path = Path(r'D:/Users/Anderson/Pictures/trash/casc_install/maya_packages')
+        if self.install_type == InstallType.GIT:
             package = r'https://github.com/Nathanieljla/cg3d-maya-casc/archive/refs/heads/main.zip'
             
         maya_scripts_path = maya_install_path.joinpath('scripts')
@@ -258,8 +262,13 @@ class Updater(QThread):
                     print(f"Failed to backup preferences:{e}")
                     backup_prefs = None
             
+  
+            cmds = [str(self.mayapy), '-m', 'pip', 'install', package, f'--target={str(maya_scripts_path)}', '--upgrade', '--force-reinstall']    
+            if self.install_type == InstallType.TEST_RELEASE:
+                cmds.insert(4, 'https://test.pypi.org/simple/')
+                cmds.insert(4, '-i')
+                cmds.append('--no-dependencies')
             
-            cmds = [str(self.mayapy), '-m', 'pip', 'install', package, f'--target={str(maya_scripts_path)}', '--upgrade', '--force-reinstall']
             self._run_pip(cmds)
             source = maya_scripts_path.joinpath('cg3dcasc', 'usersetup.py')
             dest = maya_scripts_path.joinpath('usersetup.py')
@@ -326,8 +335,7 @@ class Updater(QThread):
         print("*****************************************************")
         casc_install_path = self.casc_install #.joinpath('cg3dguru')
         package = 'cg3d-casc-core'
-        if self.dev:
-            #casc_install_path = Path(r'D:/Users/Anderson/Pictures/trash/casc_install/casc_packages')
+        if self.install_type == InstallType.GIT:
             package = r'https://github.com/Nathanieljla/cg3d-casc-core/archive/refs/heads/main.zip'
             
         if not casc_install_path.exists():
@@ -335,10 +343,20 @@ class Updater(QThread):
          
         if casc_install_path.exists(): 
             cmds = [str(self.mayapy), '-m', 'pip', 'install', package, f'--target={str(casc_install_path)}', '--upgrade', '--force-reinstall']
+            if self.install_type == InstallType.TEST_RELEASE:
+                cmds.insert(4, 'https://test.pypi.org/simple/')
+                cmds.insert(4, '-i')
+                cmds.append('--no-dependencies')
+                
             self._run_pip(cmds)
     
             package = 'wing-carrier'
             cmds = [str(self.mayapy), '-m', 'pip', 'install', package, f'--target={str(casc_install_path)}', '--upgrade', '--force-reinstall']
+            if self.install_type == InstallType.TEST_RELEASE:
+                cmds.insert(4, 'https://test.pypi.org/simple/')
+                cmds.insert(4, '-i')
+                cmds.append('--no-dependencies')
+                
             self._run_pip(cmds)
         else:
             print(f"could't make directory:{casc_install_path}")
@@ -625,6 +643,7 @@ class PathType(enum.Enum):
     MAYAPY = enum.auto()
     MOD_FILE = enum.auto()
     MOD_INSTALL = enum.auto()
+    TEST_LOCAL = enum.auto()
 
 
 
@@ -650,7 +669,8 @@ class MainWindow(QWizard):
         self.maya_mod_file_path = Path()
         self.maya_mod_install_path = Path()
         self.module_info = None
-        self.dev_install = True
+        self.install_type = InstallType.RELEASE
+        self.test_location = False
         self.auto_hide_controls = True
         self.searching = False
         self.threadpool = QThreadPool()
@@ -747,26 +767,39 @@ class MainWindow(QWizard):
         self.update_status()
 
         
-    def set_dev(self, value):
-        self.dev_install = value
+    def set_install_type(self, value):
+        self.install_type = value
+        
+        
+    def toggle_test_local(self):
+        self.test_location = not self.test_location
         
         
     def contextMenuEvent(self, event):
         menu = QMenu(self)        
 
-        release_action = menu.addAction("Release", lambda: self.set_dev(False))
-        dev_action = menu.addAction("Developer", lambda: self.set_dev(True))
+        release_action = menu.addAction("Release", lambda: self.set_install_type(InstallType.RELEASE))
+        test_action = menu.addAction("Test Release", lambda: self.set_install_type(InstallType.TEST_RELEASE))
+        git_action = menu.addAction("Git", lambda: self.set_install_type(InstallType.GIT))
+        test_local_action = menu.addAction("Test Location", self.toggle_test_local )
 
         release_action.setCheckable(True)
-        dev_action.setCheckable(True)
+        test_action.setCheckable(True)
+        git_action.setCheckable(True)
+        test_local_action.setCheckable(True)
         
         action_group = QActionGroup(self)
         action_group.setExclusive(True)
         
         action_group.addAction(release_action)
-        action_group.addAction(dev_action)
-        release_action.setChecked(not self.dev_install)
-        dev_action.setChecked(self.dev_install)
+        action_group.addAction(git_action)
+        action_group.addAction(test_action)
+        release_action.setChecked(self.install_type == InstallType.RELEASE)
+        git_action.setChecked(self.install_type == InstallType.GIT)
+        test_action.setChecked(self.install_type==InstallType.TEST_RELEASE)
+        test_local_action.setChecked(self.test_location)
+        
+        menu.insertSeparator(test_local_action)
         
         menu.exec(self.mapToGlobal(event.pos()))
 
@@ -1018,17 +1051,38 @@ class MainWindow(QWizard):
         if self.running_thread is not None and self.running_thread.isRunning():
             return
         
+        json_path = self.casc_json_path
+        casc_mod_path = self.casc_module_path
+        mod_file = self.maya_mod_file_path
+        maya_mod_path = self.maya_mod_install_path
+        
+        
+        if self.test_location:
+            folder_path = QFileDialog.getExistingDirectory(self, 'Pick install location')
+            if not folder_path:
+                return
+            
+            folder_path = Path(folder_path)
+            new_local = folder_path.joinpath('settings.json')
+            shutil.copyfile(json_path, new_local)
+            json_path = new_local
+            
+            casc_mod_path = folder_path.joinpath('CG_3D_Guru')
+            mod_file = folder_path.joinpath('cascadeur.mod')
+            maya_mod_path = folder_path.joinpath('maya_cascadeur')
+
+        
         if self.ui.install_option.isChecked():
-            self.running_thread = Updater(self.casc_json_path, self.casc_module_path,
-                           self.mayapy_path, self.maya_mod_file_path,
-                           self.maya_mod_install_path, self.dev_install)
+            self.running_thread = Updater(json_path, casc_mod_path,
+                           self.mayapy_path, mod_file,
+                           maya_mod_path, self.install_type)
             
             self.running_thread.update_complete.connect(self.install_complete)
             self.running_thread.start()
         else:
-            self.running_thread = Remover(self.casc_json_path, self.casc_module_path,
-                           self.mayapy_path, self.maya_mod_file_path,
-                           self.maya_mod_install_path, self.dev_install)
+            self.running_thread = Remover(json_path, casc_mod_path,
+                           self.mayapy_path, mod_file,
+                           maya_mod_path, self.install_type)
             
             self.running_thread.removal_complete.connect(self.install_complete)
             self.running_thread.start()
@@ -1048,7 +1102,6 @@ class MainWindow(QWizard):
             
             self.init_page_two()
             
-    
             
     def set_paths(self, mayapy_path, module_info):
         self.mayapy_path = mayapy_path
@@ -1076,6 +1129,8 @@ class MainWindow(QWizard):
 
 
 def run():
+    #https://signmycode.com/comodo-individual-code-signing
+    #https://cheapsslsecurity.com/p/standard-vs-individual-vs-ev-code-signing-certificates/
     #get_module_info(pathlib.Path(r'C:\Program Files\Autodesk\Maya2024\bin\mayapy.exe'))
     args = sys.argv
     app = QApplication(args)
