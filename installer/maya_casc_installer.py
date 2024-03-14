@@ -5,6 +5,7 @@ import shutil
 import stat
 import traceback
 import re
+import getpass
 
 #import pathlib
 from pathlib import Path
@@ -670,7 +671,7 @@ class MainWindow(QWizard):
         self.maya_mod_install_path = Path()
         self.module_info = None
         self.install_type = InstallType.RELEASE
-        self.test_location = False
+        self.test_location = getpass.getuser() == 'Anderson' and Path(r'D:\Users\Anderson\Documents\github').exists()
         self.auto_hide_controls = True
         self.searching = False
         self.threadpool = QThreadPool()
@@ -1086,6 +1087,7 @@ class MainWindow(QWizard):
             
             self.running_thread.removal_complete.connect(self.install_complete)
             self.running_thread.start()
+            
         
         
     def initializePage(self, page_id):
@@ -1095,10 +1097,7 @@ class MainWindow(QWizard):
         if page_id == 1:
             self.output_window = self.ui.result_output
             self.output_window.clear()
-            continue_install = self.check_running_apps()
-            if not continue_install:
-                print('Action Canceled')
-                return
+
             
             self.init_page_two()
             
@@ -1129,6 +1128,7 @@ class MainWindow(QWizard):
 
 
 def run():
+    #https://gist.github.com/PaulCreusy/7fade8d5a8026f2228a97d31343b335e
     #https://signmycode.com/comodo-individual-code-signing
     #https://cheapsslsecurity.com/p/standard-vs-individual-vs-ev-code-signing-certificates/
     #get_module_info(pathlib.Path(r'C:\Program Files\Autodesk\Maya2024\bin\mayapy.exe'))
