@@ -6,19 +6,33 @@ https://github.com/Nathanieljla/cg3d-maya-core/blob/main/src/cg3dguru/utils/drop
 
 If you want to modify this script for your own purposes it's better
 to pull a copy from the source location.
+
+changes:
+v1.0.0 : Users can now upgrade and uninstall as well as test from development builds
+v0.9.2 : post_install now receives bool on if main install was successful
+
+
+How to use:
+Users should modify the main() and MyInstaller class. Everything else should
+be hands off.
 """
 
 __author__ = "Nathaniel Albright"
 __email__ = "developer@3dcg.guru"
 
-VERSION = (0, 9, 0)
+VERSION = (1, 0, 0)
 __version__ = '.'.join(map(str, VERSION))
 
+
+#Cascadeur specific imports
 import stat
 import json
 import shutil
 import pathlib
 import importlib
+
+
+#default imports
 import os
 import re
 import time
@@ -85,6 +99,8 @@ class Platforms(object):
         
         
 class Commandline(object):
+    print_output = True
+    
     @staticmethod        
     def get_python_version():
         """Get the running version of python as a tuple of 3 ints"""
@@ -116,8 +132,10 @@ class Commandline(object):
         stdout = stdout.decode()
         stderr = stderr.decode()
         
-        print(stdout)
-        print(stderr)
+        if Commandline.print_output:
+            print(stdout)
+            print(stderr)
+            
         if proc.returncode:
             raise Exception('Command Failed:\nreturn code:{0}\nstderr:\n{1}\n'.format(proc.returncode, stderr))
         
@@ -184,6 +202,28 @@ class Commandline(object):
                 pass
             
         return (command,  global_pip)
+    
+    
+    @staticmethod
+    def pip(package, action, *args, **kwargs):
+        pip_command, global_pip = Commandline.get_command_string()
+        pip_args = pip_command.split('&')
+        pip_args.append(action)
+        pip_args.append(package)
+        pip_args += args
+        for key, value in kwargs.items():
+            if len(key) == 1:
+                name = '-{}'.format(key)
+            else:
+                name = '--{}'.format(key)
+                
+            pip_args.append(name)
+            pip_args.append(value)
+            
+        stdout, stderr = Commandline.run_shell_command(pip_args, 'PIP:{} Package'.format(action))
+        
+        return stdout
+        
 
                 
     @staticmethod
@@ -201,7 +241,7 @@ class Commandline(object):
         pip_command, global_pip = Commandline.get_command_string()
         cmd_str = ('{0}&uninstall&{1}').format(pip_command, package)
         args = cmd_str.split('&') + pip_args
-        stdout, stderr = Commandline.run_shell_command(args, 'PIP:Installing Package')
+        stdout, stderr = Commandline.run_shell_command(args, 'PIP:Uninstalling Package')
         
         return stdout
     
@@ -228,7 +268,7 @@ class Commandline(object):
 
         
 class ModuleDefinition(object):
-    """A .mod file can have multiple entries.  Each definition equates to one entry"""
+    """A .mod file can have multiple entries. Each definition equates to one entry"""
     
     MODULE_EXPRESSION = r"(?P<action>\+|\-)\s*(MAYAVERSION:(?P<maya_version>\d{4}))?\s*(PLATFORM:(?P<platform>\w+))?\s*(?P<module_name>\w+)\s*(?P<module_version>\d+\.?\d*.?\d*)\s+(?P<module_path>.*)\n(?P<defines>(?P<define>.+(\n?))+)?"
         
@@ -277,13 +317,17 @@ class ModuleDefinition(object):
 
 
 class ModuleManager(QThread):
-    """Used to edit .mod files quickly and easily."""
+    """Used to make modules and edit .mod files quickly and easily."""
     
     def __init__(self, module_name, module_version, package_name='',
                  include_site_packages = False):
         
         QThread.__init__(self)
-        self.install_succeeded = False
+        self.dev_branch = False
+        self.upgrade_action = False
+        self.uninstall_action = False
+        
+        self.action_succeeded = False
         
         self._module_definitions = []
         self.module_name = module_name
@@ -402,6 +446,10 @@ class ModuleManager(QThread):
     def install_remote_package(self, package_name = '', to_module = True):
         if not package_name:
             package_name = self.get_remote_package()
+        
+        
+        if not package_name:
+            return
         
         #https://stackoverflow.com/questions/39365080/pip-install-editable-with-a-vcs-url
         #github = r'https://github.com/Nathanieljla/fSpy-Maya.git'
@@ -622,10 +670,13 @@ class ModuleManager(QThread):
     def run(self):
         """this starts the QThread"""
         try:
-            self.install_succeeded = self.install()
+            self.action_succeeded = self.main_action()
         except Exception as e:
-            self.install_succeeded = False
-            print('Install Failed!!\n{0}'.format(e))
+            self.action_succeeded = False
+            if self.upgrade_action:
+                print('Upgrade Failed!!\n{0}'.format(e))
+            else:
+                print('Install Failed!!\n{0}'.format(e))
             
                  
     def get_definition_entry(self):
@@ -674,13 +725,66 @@ class ModuleManager(QThread):
             return False
         
         return True
+    
+    
+    def uninstallable(self):
+        return self.package_installed(self.package_name)
+    
+    
+    def uninstall(self):
+        return True
+    
+    
+    def dev_uninstall(self):
+        return True
+    
+    
+    def should_upgrade(self):
+        """Should the manager run the uppgrade operation instead of installing"""
+        return self.package_installed(self.package_name) and self.package_outdated(self.package_name)        
+    
+    
+    def pre_action(self, upgrade, uninstall):
+        #Cache this result
+        self.upgrade_action = upgrade
+        self.uninstall_action = uninstall
         
-
+        if self.dev_branch:
+            if self.upgrade_action:
+                return self.pre_dev_upgrade()
+            elif self.uninstall_action:
+                #there is no pre_dev_uninstall method
+                return True
+            else:
+                return self.pre_dev_install()
+        else:            
+            if self.upgrade_action:
+                return self.pre_upgrade()
+            elif self.uninstall_action:
+                #there is no pre_uninstall method
+                return True
+            else:
+                return self.pre_install()
+    
+    
+    def pre_upgrade(self):
+        return True
+    
+    
+    def pre_dev_upgrade(self):
+        return True
+    
+    
+    def pre_dev_install(self):
+        return True
+    
+    
     def pre_install(self):
         """Called before install() to do any sanity checks and prep
         
-        This function attempts to create the required install folders.
-        Sub-classes should call this function when overriding.
+        This function attempts to create the required install folders
+        and update/add the .mod file. Sub-class should call this function
+        when overriding
 
         Returns:
         --------
@@ -706,11 +810,46 @@ class ModuleManager(QThread):
         except OSError:
             return False
         
+        
+    def main_action(self):
+        #Cache this result
+        if self.dev_branch:
+            if self.upgrade_action:
+                return self.dev_upgrade()
+            elif self.uninstall_action:
+                return self.dev_uninstall()            
+            else:
+                return self.dev_install()
+        else:
+            if self.upgrade_action:
+                return self.upgrade()
+            elif self.uninstall_action:
+                return self.uninstall()
+            else:
+                return self.install()
+    
+    
+    def upgrade(self):
+        print("Upgrade")
+        return True
+    
+    
+    def dev_upgrade(self):
+        print("Dev Upgrade")
+        return True
+    
+    
+    def dev_install(self):
+        print("Dev Install")
         return True
     
 
     def install(self):
-        """The main install function users should override"""        
+        """The main install function users should override
+        
+        returns:
+            bool:was the installation successful?
+        """        
         installed = False
         if not self.package_installed(self.package_name):
 
@@ -723,28 +862,64 @@ class ModuleManager(QThread):
         return installed
     
     
+    def post_action(self):
+        if self.dev_branch:
+            if self.upgrade_action:
+                return self.post_dev_upgrade(self.action_succeeded)
+            elif self.uninstall_action:
+                #uninstall has no post dev uninstall method
+                return True   
+            else:
+                return self.post_dev_install(self.action_succeeded)
+        else:
+            if self.upgrade_action:
+                return self.post_upgrade(self.action_succeeded)
+            elif self.uninstall_action:
+                #uninstall has no post uninstall method
+                return True            
+            else:
+                return self.post_install(self.action_succeeded)
+    
+    
+    def post_dev_upgrade(self, upgrade_succeeded: bool):
+        return True
+    
+    
+    def post_dev_install(self, install_succeeded: bool):
+        return True
+    
+
+    def post_upgrade(self, upgrade_succeeded: bool):
+        return True
+    
+    
     def post_install(self, install_succeeded: bool):
         """Used after install() to do any clean-up
         
         This function also updates/adds the .mod file.
         Sub-classes should call this function when overriding.
+        
+        Returns:
+        --------
+        bool
+            True if all post install operations executed as expected
         """
         
         print('post install')
         if install_succeeded:
+            #make sure the scripts path has been added so we can start running code.
             if self.scripts_path not in sys.path:
                 sys.path.append(self.scripts_path)
                 print('Add scripts path [{}] to system paths'.format(self.scripts_path))
-            else:
-                print('scripts path in system paths')
-                
+
+            #make the mod file.                
             filename = os.path.join(self.install_root, (self.module_name + '.mod'))
             self.read_module_definitions(filename)
                   
-            self.update_module_definition(filename)
-            
+            return self.update_module_definition(filename)
+        
         return True
-                
+    
                 
     def install_pymel(self):
         """Installs pymel to a common Maya location"""
@@ -878,10 +1053,11 @@ class InstallerUi(QWidget):
     def __init__(self, name, module_manager, background_color = '',
                  company_logo_size = [64, 64],
                  launch_message='', 
-                 installing_message = 'Installing\nplease wait ...',
-                 failed_message='Install Failed!\nSee output.',
-                 success_message="Install Completed\nSuccessfully!",
-                 post_error_messsage='Install Successful.\nClean-up errored.\nSee output.', 
+                 installing_message = 'Installing, please wait ...',
+                 failed_message='Install Failed!',
+                 success_message="Install Successful!",
+                 post_error_messsage='Install Successful. Clean-up errored.  See output.',
+                 show_dev_menu=False, 
                  *args, **kwargs
                  ):
         
@@ -891,16 +1067,53 @@ class InstallerUi(QWidget):
         self.name = name
         self.module_manager = module_manager
         
+        Commandline.print_output = False
+        self.upgradable = self.module_manager.should_upgrade()
+        self.uninstallable = self.upgradable or self.module_manager.uninstallable()
+        Commandline.print_output = True
+        
+        self.is_uninstall = not self.upgradable and self.uninstallable
+        
         self.launch_message = launch_message
         self.installing_message = installing_message
         self.failed_message = failed_message
         self.success_message = success_message
         self.post_error_messsage =  post_error_messsage
+        self.show_dev_menu = show_dev_menu
         
         self.create_layout(background_color, company_logo_size)
         self.set_default_size(name)
-        self.install_button.clicked.connect(self.on_install)
+        self.install_button.clicked.connect(self.on_action)
         self.close_button.clicked.connect(self.on_close)
+        
+        
+        
+    def contextMenuEvent(self, event):
+        if not self.show_dev_menu:
+            return
+        
+        menu = QMenu(self)
+
+        release_action = menu.addAction("Release")
+        dev_action = menu.addAction("Developer")
+
+        release_action.setCheckable(True)
+        dev_action.setCheckable(True)
+        
+        action_group = QActionGroup(self)
+        action_group.setExclusive(True)
+        
+        action_group.addAction(release_action)
+        action_group.addAction(dev_action)
+        release_action.setChecked(not self.module_manager.dev_branch)
+        dev_action.setChecked(self.module_manager.dev_branch)
+        
+        action = menu.exec_(self.mapToGlobal(event.pos()))
+        if action is not None:
+            self.module_manager.dev_branch = action==dev_action
+            
+            
+        self.set_install_button_label()
         
 
     def set_default_size(self, name):
@@ -924,6 +1137,25 @@ class InstallerUi(QWidget):
         self.setGeometry(QRect(widthCenter, heightCenter, width, height))
         
         
+        
+    def set_install_button_label(self):
+        label = ''
+        if self.upgradable:
+            label = 'Upgrade'
+            if self.module_manager.dev_branch:
+                label += ' (Dev)'
+                
+        elif self.is_uninstall:
+            label = 'Uninstall'
+            
+        else:
+            label = 'Install'
+            if self.module_manager.dev_branch:
+                label += ' (Dev)'
+                
+        self.install_button.setText(label)
+        
+        
     def create_layout(self, background_color, company_logo_size):
         #background color
         if background_color:
@@ -941,11 +1173,13 @@ class InstallerUi(QWidget):
             logo.setPixmap(smallLogo)
             logo.setAlignment(Qt.AlignCenter | Qt.AlignCenter)
             logo.setMargin(15)
-
+            
+        
         self.install_button = IconButton('Install', highlight=True) #, icon=RESOURCES.install_icon)
         self.install_button.setMinimumHeight(42)
         self.close_button = IconButton(' Close', icon=RESOURCES.close_icon)
         self.close_button.setMinimumHeight(42)
+        self.set_install_button_label()
 
         self.message_label = QLabel()
         self.message_label.setText(self.launch_message)
@@ -982,35 +1216,47 @@ class InstallerUi(QWidget):
 
         outer.addLayout(button_layout)
         self.layout()
+            
+    def _message(self, message):
+        if self.module_manager.upgrade_action:
+            return message.replace("Install", "Upgrade")
+        elif self.is_uninstall:
+            return message.replace('Install', 'Uninstall')
+        else:
+            return message
+        
+            
                 
-    def on_install(self):
+    def on_action(self):
         self.install_button.hide()
         #self.movie.start() #I'm thinking this causes maya to crash when debugging in WING
         self.animated_gif.show()
-        self.message_label.setText(self.installing_message)
+        self.message_label.setText(self._message(self.installing_message))
         self.message_label.show()
         self.repaint()
         
-        if self.module_manager.pre_install():
+        
+        if self.module_manager.pre_action(self.upgradable, self.is_uninstall):
             self.connect(self.module_manager, SIGNAL('finished()'), self.done)
             self.module_manager.start()
         else:
             self.close_button.show()
             self.animated_gif.hide()
-            self.message_label.setText(self.failed_message)
+            
+            self.message_label.setText(self._message(self.failed_message))
         
     
     def done(self):
         self.close_button.show()
         self.animated_gif.hide()
-        if self.module_manager.install_succeeded:
-            self.message_label.setText(self.success_message)
+        if self.module_manager.action_succeeded:
+            self.message_label.setText(self._message(self.success_message))
         else:
-            self.message_label.setText(self.failed_message)
-        
-        no_errors = self.module_manager.post_install(self.module_manager.install_succeeded)
+            self.message_label.setText(self._message(self.failed_message))
+         
+        no_errors = self.module_manager.post_action()
         if not no_errors:
-            self.message_label.setText(self.post_error_messsage)
+            self.message_label.setText(self._message(self.post_error_messsage))
     
         
     def on_close(self):
@@ -1032,8 +1278,7 @@ class MyInstaller(ModuleManager):
         
         self.nekki_dir = None
         self.my_data_dir = None
-        
-        
+                
     def clean_folder(self, path: str):
         folder = pathlib.Path(path)
         for child in folder.iterdir():
@@ -1042,8 +1287,6 @@ class MyInstaller(ModuleManager):
             else:
                 child.unlink() #missing_ok=True) #missing_ok doens't work for maya 2022
                 
-            
-        
     def pre_install(self):        
         super().pre_install()
 
@@ -1089,8 +1332,7 @@ class MyInstaller(ModuleManager):
         return True
     
 
-    def get_remote_package(self):
-        return 'cg3d-maya-casc' #https://github.com/Nathanieljla/cg3d-maya-casc/archive/refs/heads/main.zip'
+
     
     
     def install(self):
@@ -1172,12 +1414,11 @@ class MyInstaller(ModuleManager):
             print("\n\n")
             
             with open(log, 'w') as f:
-                f.write(callstack)
+                f.write(callstack)  
                 
             return False
         
         return True
-    
     
     
     def post_install(self, install_succeeded):
@@ -1202,13 +1443,94 @@ class MyInstaller(ModuleManager):
         
         #return True
         return self.casc_setup()
+    
+    
 
+    def _no_dep_install(self, package_name):
+        result = False
+        try:
+            #--upgrade doesn't work because it trys to upgrade dependencies that are loaded
+            Commandline.pip(package_name, 'install', '--no-deps', '--force-reinstall', target=self.scripts_path)
+            result = True
+        except Exception as e:
+            print('no dep install/upgrade of {0} failed:{1}'.format(package_name, e))
+            
+        return result
+    
+    
+    def upgrade(self):
+        def _upgrade(package_name):
+            result = False
+    
+            if self.package_installed(package_name) and self.package_outdated(package_name):
+                print("attempting upgrade of {}".format(package_name))
+                result = self._no_dep_install(package_name)
+            else:
+                print("{} is up-to-date.".format(package_name))
+                result = True
+    
+
+            return result
+        
+        
+        Commandline.print_output = False
+        upgraded = _upgrade(self.package_name) and _upgrade('cg3d-maya-core')
+        Commandline.print_output = True
+        
+        print("Upgrading done!")
+        return upgraded
+    
+    
+    def uninstall(self):
+        uninstalled = False
+        try:
+            import cg3dcasc.menu
+            import maya.cmds as cmds
+            cmds.deleteUI(cg3dcasc.menu.MENU_ITEM.menu_instance)
+        except Exception as e:
+            print(e)
+            
+        try:
+            mod_file = pathlib.Path(os.path.join(self.install_root, (self.module_name + '.mod')))
+            if mod_file.exists():
+                mod_file.unlink()
+            
+            #We can't remove the cascadeur folder while Maya's running.
+            #TODO: Tell users where they can delete the folder.
+            if os.path.exists(self.module_path):
+                shutil.rmtree(self.module_path, ignore_errors=True)
+                
+            uninstalled = True
+        except Exception as e:
+            print("Uninstall failed:{}".format(e))
+            
+
+        return uninstalled
+    
+    
+    def pre_dev_install(self):
+        return self.pre_install()
+    
+    def dev_install(self):
+        self._no_dep_install(r'https://github.com/Nathanieljla/cg3d-maya-casc/archive/refs/heads/main.zip')
+        self._no_dep_install(r'https://github.com/Nathanieljla/cg3d-maya-core/archive/refs/heads/main.zip')
+        self._no_dep_install(r'https://github.com/Nathanieljla/wing-carrier/archive/refs/heads/main.zip')
+        
+        return True
+    
+    def post_dev_install(self, install_succeeded):
+        return self.post_install(install_succeeded)
+    
+    
+    def get_remote_package(self):
+        return 'cg3d-maya-casc'
+        
     
 def main():
     if MAYA_RUNNING:
         MODULE_NAME = 'cascadeur'
         MODULE_VERSION = 1.0
-        PACKAGE_NAME = MODULE_NAME
+        PACKAGE_NAME = "cg3d-maya-casc"
         
         manager = MyInstaller(MODULE_NAME, MODULE_VERSION, package_name = PACKAGE_NAME)
         
@@ -1220,10 +1542,17 @@ def main():
         global RESOURCES
         RESOURCES = Resources()
         window_name =  manager.module_name.replace("_", " ")
-        installer = InstallerUi(window_name, manager, background_color=background_color, company_logo_size=logo_size)
-        installer.message_label.setText("Let's get going!")
-        RESOURCES.set_installer(installer)
+        
+        installer = InstallerUi(window_name,
+                                manager,
+                                launch_message="Let's get going!",
+                                background_color=background_color,
+                                company_logo_size=logo_size,
+                                show_dev_menu=False
+                                )
+        
 
+        RESOURCES.set_installer(installer)
         installer.show()
 
            

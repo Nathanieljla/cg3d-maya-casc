@@ -2,14 +2,15 @@
 import json
 import tempfile
 import os
-import typing
+#import typing
 import uuid
-import winreg
-import psutil
+#import winreg
+#import psutil
 import pathlib
 
 import pymel.core as pm
 from . import hik
+from . import preferences
 
 import wingcarrier.pigeons
 import cg3dguru.udata
@@ -21,8 +22,6 @@ import cg3dguru.utils
 class SpineException(Exception):
     """Thrown when an export is attempted without an upper spine bone defined"""
     pass
-
-
 
 #https://forums.autodesk.com/t5/maya-programming/python-hik/td-p/4262564
 #https://mayastation.typepad.com/maya-station/2011/04/maya-2012-hik-menus-and-mel-commands-part-1.html
@@ -921,7 +920,15 @@ def _export_data(export_data, export_folder: pathlib.Path, export_rig: bool, exp
         filename = '{}.{}.fbx'.format(node_name, file_id)
         fbx_file_path = export_folder.joinpath(filename)
         print('FBX file: {}'.format(fbx_file_path))
-        cg3dguru.animation.fbx.export(filename = fbx_file_path)
+        
+        
+        prefs = preferences.get()
+        bake = prefs.bake_animations == preferences.OptionEnum.ALWAYS
+        if prefs.bake_animations == preferences.OptionEnum.ASK:
+            result = pm.confirmDialog(title='Export Animations', message='Bake Animation?', messageAlign='center', button=['Yes', 'No'], defaultButton='Yes', cancelButton='No', dismissString='No')
+            bake = result == 'Yes'
+        
+        cg3dguru.animation.fbx.export(fbx_file_path, bake_animations=bake)
         
         pm.select(user_selection, replace=True)
         
@@ -968,6 +975,7 @@ def get_textures(objs):
     materials = {}
     
     shapes = pm.listRelatives(objs, s=True)
+    shapes += pm.ls(objs, shapes=True)
     for shape in shapes:
         sgs = pm.listConnections(shape, type='shadingEngine' )
         for sg in sgs:
