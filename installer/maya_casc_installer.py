@@ -268,7 +268,7 @@ class Updater(QThread):
             if self.install_type == InstallType.TEST_RELEASE:
                 cmds.insert(4, 'https://test.pypi.org/simple/')
                 cmds.insert(4, '-i')
-                cmds.append('--no-dependencies')
+                #cmds.append('--no-dependencies')
             
             self._run_pip(cmds)
             source = maya_scripts_path.joinpath('cg3dcasc', 'usersetup.py')
@@ -1068,7 +1068,7 @@ class MainWindow(QWizard):
             shutil.copyfile(json_path, new_local)
             json_path = new_local
             
-            casc_mod_path = folder_path.joinpath('CG_3D_Guru')
+            casc_mod_path = folder_path.joinpath('CG_3D_Guru', 'Cascadeur')
             mod_file = folder_path.joinpath('cascadeur.mod')
             maya_mod_path = folder_path.joinpath('maya_cascadeur')
 
