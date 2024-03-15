@@ -234,7 +234,19 @@ class Updater(QThread):
             nextline = process.stderr.readline()
             nextline = nextline.strip()
             if nextline:
-                print(nextline.decode())        
+                print(nextline.decode())
+                
+                
+    def _install(self, package, path):
+        cmds = [str(self.mayapy), '-m', 'pip', 'install', package, f'--target={str(path)}', '--upgrade', '--force-reinstall']
+        if self.install_type == InstallType.TEST_RELEASE:
+            cmds.insert(4, 'https://test.pypi.org/simple/')
+            cmds.insert(4, '-i')            
+        
+        if self.install_type != InstallType.RELEASE:
+            cmds.append('--no-dependencies')
+        
+        self._run_pip(cmds)        
 
 
     def _run(self):
@@ -243,16 +255,15 @@ class Updater(QThread):
         backup_prefs = None
         print("\nINSTALLING MAYA PACKAGES")
         print("*****************************************************")
-        maya_install_path = self.maya_install
-        package = 'cg3d-maya-casc'
-        if self.install_type == InstallType.GIT:
-            package = r'https://github.com/Nathanieljla/cg3d-maya-casc/archive/refs/heads/main.zip'
-            
+        maya_install_path = self.maya_install    
         maya_scripts_path = maya_install_path.joinpath('scripts')
         if not maya_scripts_path.exists():
             os.makedirs(maya_scripts_path)
             
-        if maya_scripts_path.exists():
+        if not maya_scripts_path.exists():
+            raise FileNotFoundError(f"could't make directory:{maya_scripts_path}")
+        else:
+            #lets do all our pip installs
             source_prefs = maya_scripts_path.joinpath('cg3dcasc', 'preferences', 'prefs.pickle')
             if source_prefs.exists():
                 print("Backing up prefs")
@@ -263,23 +274,39 @@ class Updater(QThread):
                     print(f"Failed to backup preferences:{e}")
                     backup_prefs = None
             
-  
-            cmds = [str(self.mayapy), '-m', 'pip', 'install', package, f'--target={str(maya_scripts_path)}', '--upgrade', '--force-reinstall']    
-            if self.install_type == InstallType.TEST_RELEASE:
-                cmds.insert(4, 'https://test.pypi.org/simple/')
-                cmds.insert(4, '-i')
-                #cmds.append('--no-dependencies')
             
-            self._run_pip(cmds)
+            package = 'cg3d-maya-casc'
+            if self.install_type == InstallType.GIT:
+                package = r'https://github.com/Nathanieljla/cg3d-maya-casc/archive/refs/heads/main.zip'
+            elif self.install_type == InstallType.TEST_RELEASE:
+                package = 'cg3d-maya-casc==1.1.2rc1'
+                
+            self._install(package, maya_scripts_path)
+    
             source = maya_scripts_path.joinpath('cg3dcasc', 'usersetup.py')
             dest = maya_scripts_path.joinpath('usersetup.py')
             if not source.exists():
                 print(f"Can't find user setup file:{source}")
             else:
                 shutil.copyfile(source, dest)
-            
-        else:
-            raise FileNotFoundError(f"could't make directory:{maya_scripts_path}")
+                
+            #testing the installer in test-pypi sucks. Let's get what need need from various places 
+            if self.install_type == InstallType.TEST_RELEASE:
+                #Install wingcarrier & cg3d-maya-core (without dependencies), and pymel 
+                self._install('wing-carrier==1.1.1rc1', maya_scripts_path)
+                self._install('cg3d-maya-core==0.6.2rc1', maya_scripts_path)
+               
+                cmds = [str(self.mayapy), '-m', 'pip', 'install', 'pymel', f'--target={str(maya_scripts_path)}', '--upgrade', '--force-reinstall']
+                self._run_pip(cmds)
+                
+            elif self.install_type == InstallType.GIT:
+                #Install wingcarrier & cg3d-maya-core (without dependencies), and pymel 
+                self._install('https://github.com/Nathanieljla/wing-carrier/archive/refs/heads/main.zip', maya_scripts_path)
+                self._install('https://github.com/Nathanieljla/cg3d-maya-core/archive/refs/heads/main.zip', maya_scripts_path)
+               
+                cmds = [str(self.mayapy), '-m', 'pip', 'install', 'pymel', f'--target={str(maya_scripts_path)}', '--upgrade', '--force-reinstall']
+                self._run_pip(cmds)                
+                                     
             
         if backup_prefs and backup_prefs.exists():
             try:
@@ -310,12 +337,6 @@ class Updater(QThread):
         if self.mod_file.exists():
             m_editor.read_module_definitions(self.mod_file)
             mod_entry = m_editor.get_entry_by_path(self.maya_install)
-            #install_paths = m_editor.get_install_paths()
-            #mod_entry = None
-            #for idx, mod_path in install_paths.items():
-                #if mod_path == self.maya_install:
-                    #mod_entry = m_editor.get_definition_by_idx(idx)
-                    #break
                 
             if mod_entry is not None:
                 mod_entry.module_version = version
@@ -330,37 +351,32 @@ class Updater(QThread):
             m_editor.add_definition(new_def)
             m_editor.write_module_definitions(self.mod_file)        
                 
-                
         #install cascadeur packages
         print("\nINSTALLING CASCADEUR PACKAGES")
         print("*****************************************************")
         casc_install_path = self.casc_install #.joinpath('cg3dguru')
-        package = 'cg3d-casc-core'
-        if self.install_type == InstallType.GIT:
-            package = r'https://github.com/Nathanieljla/cg3d-casc-core/archive/refs/heads/main.zip'
-            
         if not casc_install_path.exists():
             os.makedirs(casc_install_path)
          
-        if casc_install_path.exists(): 
-            cmds = [str(self.mayapy), '-m', 'pip', 'install', package, f'--target={str(casc_install_path)}', '--upgrade', '--force-reinstall']
-            if self.install_type == InstallType.TEST_RELEASE:
-                cmds.insert(4, 'https://test.pypi.org/simple/')
-                cmds.insert(4, '-i')
-                cmds.append('--no-dependencies')
-                
-            self._run_pip(cmds)
-    
-            package = 'wing-carrier'
-            cmds = [str(self.mayapy), '-m', 'pip', 'install', package, f'--target={str(casc_install_path)}', '--upgrade', '--force-reinstall']
-            if self.install_type == InstallType.TEST_RELEASE:
-                cmds.insert(4, 'https://test.pypi.org/simple/')
-                cmds.insert(4, '-i')
-                cmds.append('--no-dependencies')
-                
-            self._run_pip(cmds)
+        if not casc_install_path.exists():
+            raise FileNotFoundError(f"could't make directory:{casc_install_path}")
         else:
-            print(f"could't make directory:{casc_install_path}")
+            casc_package = 'cg3d-casc-core'
+            if self.install_type == InstallType.TEST_RELEASE:
+                casc_package = 'cg3d-casc-core'           
+            elif self.install_type == InstallType.GIT:
+                casc_package = r'https://github.com/Nathanieljla/cg3d-casc-core/archive/refs/heads/main.zip'
+                
+            self._install(casc_package, casc_install_path)
+            
+            wing_package = 'wing-carrier'
+            if self.install_type == InstallType.TEST_RELEASE:
+                wing_package = 'wing-carrier==1.1.1rc1'
+            elif self.install_type == InstallType.GIT:
+                wing_package = 'https://github.com/Nathanieljla/wing-carrier/archive/refs/heads/main.zip'
+                
+            self._install(wing_package, casc_install_path)
+
             
         print("WRAPPING STUFF UP")
         print("*****************************************************")
@@ -402,7 +418,6 @@ class Updater(QThread):
     
             os.chmod(self.casc_json, read_state)
 
-     
 
     def run(self):
         print("*****************************************************")
@@ -496,7 +511,6 @@ class Remover(QThread):
         print("Deleting folders")
         shutil.rmtree(self.maya_install, ignore_errors=True)   
         shutil.rmtree(self.casc_install, ignore_errors=True)
-        
         
         
     def run(self):
@@ -909,6 +923,13 @@ class MainWindow(QWizard):
         mod_installed = self.is_path(self.maya_mod_install_path.joinpath('scripts'))
         upgrading = casc_installed or mod_file_installed or mod_installed
         
+        if mod_file_installed and mod_installed:
+            self.ui.find_module_button.setVisible(False)
+        else:
+            self.ui.find_module_button.setVisible(True)
+            
+        self.ui.casc_json_set.setVisible(not cascadeur_ready)
+        
         if upgrading:
             self.ui.install_option.setText("Upgrade/Repair")
             self.ui.install_option.setVisible(True)
@@ -985,6 +1006,7 @@ class MainWindow(QWizard):
         self.ui.casc_json_value.setReadOnly(True)
         self.ui.casc_install_value.setReadOnly(True)
         self.ui.py_path_value.setReadOnly(True)
+        self.ui.maya_mod_value.setText("----FOR Advanced Users ONLY----")
         self.ui.maya_mod_value.setReadOnly(True)
         self.ui.maya_install_value.setReadOnly(True)
         self.show_layout(self.ui.progress_group, False)
@@ -1048,7 +1070,6 @@ class MainWindow(QWizard):
             self.page_two = self.currentPage()
             self.page_two.set_parent(self)
 
-        
         if self.running_thread is not None and self.running_thread.isRunning():
             return
         
@@ -1057,6 +1078,16 @@ class MainWindow(QWizard):
         mod_file = self.maya_mod_file_path
         maya_mod_path = self.maya_mod_install_path
         
+        def bad_path(m_path):
+            if not os.access(m_path, os.R_OK | os.W_OK):
+                print(f"Can't read/write to {m_path}")
+                return True
+            return False
+                
+        if bad_path(json_path) or bad_path(casc_mod_path) or\
+           bad_path(mod_file) or bad_path(maya_mod_path) :
+            print("Action Failed")
+            return
         
         if self.test_location:
             folder_path = QFileDialog.getExistingDirectory(self, 'Pick install location')
