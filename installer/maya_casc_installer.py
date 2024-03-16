@@ -925,8 +925,12 @@ class MainWindow(QWizard):
         
         if mod_file_installed and mod_installed:
             self.ui.find_module_button.setVisible(False)
+            self.ui.maya_mod_value.setVisible(False)
+            self.ui.maya_mod_label.setVisible(False)
         else:
             self.ui.find_module_button.setVisible(True)
+            self.ui.maya_mod_value.setVisible(True)
+            self.ui.maya_mod_label.setVisible(True)
             
         self.ui.casc_json_set.setVisible(not cascadeur_ready)
         
