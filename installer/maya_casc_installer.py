@@ -279,7 +279,7 @@ class Updater(QThread):
             if self.install_type == InstallType.GIT:
                 package = r'https://github.com/Nathanieljla/cg3d-maya-casc/archive/refs/heads/main.zip'
             elif self.install_type == InstallType.TEST_RELEASE:
-                package = 'cg3d-maya-casc==1.1.2rc1'
+                package = 'cg3d-maya-casc'
                 
             self._install(package, maya_scripts_path)
     
@@ -293,7 +293,7 @@ class Updater(QThread):
             #testing the installer in test-pypi sucks. Let's get what need need from various places 
             if self.install_type == InstallType.TEST_RELEASE:
                 #Install wingcarrier & cg3d-maya-core (without dependencies), and pymel 
-                self._install('wing-carrier==1.1.1rc1', maya_scripts_path)
+                self._install('wing-carrier==1.1.1', maya_scripts_path)
                 self._install('cg3d-maya-core==0.6.2rc1', maya_scripts_path)
                
                 cmds = [str(self.mayapy), '-m', 'pip', 'install', 'pymel', f'--target={str(maya_scripts_path)}', '--upgrade', '--force-reinstall']
@@ -371,7 +371,7 @@ class Updater(QThread):
             
             wing_package = 'wing-carrier'
             if self.install_type == InstallType.TEST_RELEASE:
-                wing_package = 'wing-carrier==1.1.1rc1'
+                wing_package = 'wing-carrier==1.1.1'
             elif self.install_type == InstallType.GIT:
                 wing_package = 'https://github.com/Nathanieljla/wing-carrier/archive/refs/heads/main.zip'
                 
