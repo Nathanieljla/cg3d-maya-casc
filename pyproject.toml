@@ -19,8 +19,8 @@ classifiers = [
 
 dependencies = [
     "pymel>=1.3",
-    "cg3d-maya-core==0.6.2",
-    "wing-carrier==1.1.1"
+    "cg3d-maya-core>=0.6.2",
+    "wing-carrier>=1.1.1"
 ]
 
 [project.urls]
