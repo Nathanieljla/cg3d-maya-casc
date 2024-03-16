@@ -36,7 +36,7 @@ This will automatically install all the dependencies without requiring admin pri
  (you can say 'yes' to the question)
 
  # Revisions
- ### 1.1.1
+ ### 1.1.2
  Updated to support Cascadeur 2024.1
  Updated package dependencies to be version specific
  
