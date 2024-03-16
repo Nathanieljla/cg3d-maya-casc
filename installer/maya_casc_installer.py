@@ -25,54 +25,10 @@ from installer.installer_ui import Ui_Wizard
 import installer.core as icore
 
 
-#pyside6-uic D:\Users\Anderson\Documents\github\cg3d-maya-casc\src\installer\installer.ui -o D:\Users\Anderson\Documents\github\cg3d-maya-casc\src\installer\installer_ui.py
+#pyside6-uic D:\Users\Anderson\Documents\github\cg3d-maya-casc\installer\installer.ui -o D:\Users\Anderson\Documents\github\cg3d-maya-casc\installer\installer_ui.py
 
 
-def get_user_docs_path():
-    #https://stackoverflow.com/questions/3858851/how-to-get-windows-special-folders-for-currently-logged-in-user
-    CSIDL_PERSONAL= 5
-    SHGFP_TYPE_CURRENT= 0
-    buf= ctypes.create_unicode_buffer(ctypes.wintypes.MAX_PATH)
-    ctypes.windll.shell32.SHGetFolderPathW(0, CSIDL_PERSONAL, 0, SHGFP_TYPE_CURRENT, buf)
-    
-    path = Path(buf.value)
-    if not path.exists():
-        path = None
-        
-    return path
-    
 
-
-#logger : https://stackoverflow.com/questions/14058453/making-python-loggers-output-all-messages-to-stdout-in-addition-to-log-file
-#https://betterstack.com/community/guides/logging/how-to-start-logging-with-python/
-def get_maya_installs():
-    """Look through the registry and find all Maya installations"""
-    #Computer\HKEY_LOCAL_MACHINE\SOFTWARE\Autodesk\Maya\2024\AppInfo
-    #Computer\HKEY_LOCAL_MACHINE\SOFTWARE\Autodesk\Maya\2024\Setup\InstallPath
-    #Computer\HKEY_LOCAL_MACHINE\SOFTWARE\Classes\MayaAsciiFile\shell\open\command
-    
-    #Computer\HKEY_LOCAL_MACHINE\SOFTWARE\Classes\Cascadeur
-    #Computer\HKEY_LOCAL_MACHINE\SOFTWARE\Classes\Cascadeur\shell\open\command
-    #Computer\HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Cascadeur
-    #Computer\HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Nekki Limited\Cascadeur
-    
-    maya_installs = {}
-    versions = [2023,2024]
-    for version in versions:
-        mkey = r'SOFTWARE\Autodesk\Maya\{}\Setup\InstallPath'.format(version)
-        try:
-            hkey = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, mkey, 0, winreg.KEY_READ)
-            value, value_type = winreg.QueryValueEx(hkey, 'MAYA_INSTALL_LOCATION')
-
-            winreg.CloseKey(hkey)
-            py_exe = Path(value).joinpath('bin', 'mayapy.exe')
-            if py_exe.exists():
-                maya_installs[version] = py_exe
-        except Exception as e:
-            pass
-            #print(f"failed {e}: Maya Version->{version}")
-            
-    return maya_installs
          
 
 pip_cmd =\
@@ -169,19 +125,103 @@ def process_id(process_name):
 
 
 
-def get_default_casc_install():
-    local_dir = Path(os.getenv('LOCALAPPDATA'))
-    return local_dir.joinpath('CG_3D_Guru', 'Cascadeur')
+def get_maya_installs():
+    """Look through the registry and find all Maya installations"""
+    #Computer\HKEY_LOCAL_MACHINE\SOFTWARE\Autodesk\Maya\2024\AppInfo
+    #Computer\HKEY_LOCAL_MACHINE\SOFTWARE\Autodesk\Maya\2024\Setup\InstallPath
+    #Computer\HKEY_LOCAL_MACHINE\SOFTWARE\Classes\MayaAsciiFile\shell\open\command
+    
+    #Computer\HKEY_LOCAL_MACHINE\SOFTWARE\Classes\Cascadeur
+    #Computer\HKEY_LOCAL_MACHINE\SOFTWARE\Classes\Cascadeur\shell\open\command
+    #Computer\HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Cascadeur
+    #Computer\HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Nekki Limited\Cascadeur
+    maya_installs = {}
+    versions = [2023,2024]
+    for version in versions:
+        mkey = r'SOFTWARE\Autodesk\Maya\{}\Setup\InstallPath'.format(version)
+        try:
+            hkey = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, mkey, 0, winreg.KEY_READ)
+            value, value_type = winreg.QueryValueEx(hkey, 'MAYA_INSTALL_LOCATION')
+
+            winreg.CloseKey(hkey)
+            py_exe = Path(value).joinpath('bin', 'mayapy.exe')
+            if py_exe.exists():
+                maya_installs[version] = py_exe
+        except Exception as e:
+            pass
+            #print(f"failed {e}: Maya Version->{version}")
+            
+    return maya_installs
+
+
+
+def get_user_docs_path():
+    #https://stackoverflow.com/questions/3858851/how-to-get-windows-special-folders-for-currently-logged-in-user
+    CSIDL_PERSONAL= 5
+    SHGFP_TYPE_CURRENT= 0
+    buf= ctypes.create_unicode_buffer(ctypes.wintypes.MAX_PATH)
+    ctypes.windll.shell32.SHGetFolderPathW(0, CSIDL_PERSONAL, 0, SHGFP_TYPE_CURRENT, buf)
+    
+    path = Path(buf.value)
+    if not path.exists():
+        path = None
+        
+    return path
+
+
+#user_paths = None
+
+#def get_user_paths():
+    ##This doesn't work, because the user might not have write permissions.
+    #global user_paths
+    
+    #if user_paths is not None:
+        #return user_paths
+    
+    #user_cache = Path(__file__).parent.joinpath('user_paths.json')
+    #if user_cache.exists():
+        #json_file = open(user_cache)
+        #user_paths = json.load(json_file)
+        #json_file.close()
+    
+    #else:
+        #user_paths = {}
+        #user_paths['LOCALAPPDATA'] = os.getenv('LOCALAPPDATA')
+        #user_paths['DOCUMENTS'] =  str(get_user_docs_path())
+        
+        #json_file = open(user_cache, 'w')
+        #formatted_json = json.dumps(user_paths, indent = 4)
+        #json_file.write(formatted_json)
+        #json_file.close()
+        
+    #user_paths['LOCALAPPDATA'] = Path(user_paths['LOCALAPPDATA'])
+    #user_paths['DOCUMENTS'] = Path(user_paths['DOCUMENTS'])
+    
+    #return user_paths
+    
+    
+
+    
+                
+
 
 def get_default_mod_file_path():
+    #docs_path = get_user_paths()['DOCUMENTS']
     docs_path = get_user_docs_path()
     return docs_path.joinpath('maya', 'modules', 'cascadeur.mod')
 
 def get_default_maya_install_path():
+    #docs_path = get_user_paths()['DOCUMENTS']
     docs_path = get_user_docs_path()
     return docs_path.joinpath('maya', 'modules', 'cascadeur')
 
+def get_default_casc_install():
+    #local_dir = get_user_paths()['LOCALAPPDATA'] 
+    local_dir = Path(os.getenv('LOCALAPPDATA'))
+    return local_dir.joinpath('CG_3D_Guru', 'Cascadeur')
+
 def get_cascadeur_settings_path():
+    #local_dir = get_user_paths()['LOCALAPPDATA'] 
     local_dir = Path(os.getenv('LOCALAPPDATA'))
     settings_json = local_dir.joinpath('Nekki Limited', 'cascadeur', 'settings.json')
     
@@ -189,6 +229,7 @@ def get_cascadeur_settings_path():
         settings_json = None
         
     return settings_json
+
 
 
 class InstallType(enum.IntEnum):
@@ -200,6 +241,7 @@ class InstallType(enum.IntEnum):
 
 class Updater(QThread):
     update_complete = Signal(bool)
+    permission_error = Signal()
     
     def __init__(self, casc_json: Path, casc_install: Path, mayapy: Path,
                  mod_file: Path, maya_install: Path, install_type, *args, **kwargs):
@@ -209,9 +251,9 @@ class Updater(QThread):
         self.install_type = install_type
         self.casc_json = casc_json
         self.mayapy = mayapy
-        self.casc_install = casc_install if casc_install.is_absolute() else get_default_casc_install()
-        self.mod_file = mod_file if mod_file.is_absolute() else get_default_mod_file_path()
-        self.maya_install = maya_install if maya_install.is_absolute() else get_default_maya_install_path()  
+        self.casc_install = casc_install #if casc_install.is_absolute() else get_default_casc_install()
+        self.mod_file = mod_file #if mod_file.is_absolute() else get_default_mod_file_path()
+        self.maya_install = maya_install #if maya_install.is_absolute() else get_default_maya_install_path()  
 
     @Slot()
     def quit(self):
@@ -315,7 +357,7 @@ class Updater(QThread):
                 print(f"Failed to restore preferences:{e}")
                 backup_prefs = None
                 
-                
+                         
         #Let's make sure the module def is up-to-date
         print("Working on Module Definition File")
         version = 1.0
@@ -329,7 +371,6 @@ class Updater(QThread):
             for result in re.finditer(version_exps, text):
                 resultDict = result.groupdict()
                 if resultDict['version']:
-                    print("Previous Entry Found")
                     pack_version = resultDict['version']
                     version = pack_version.strip("()").replace(", ", ".")
             
@@ -420,6 +461,32 @@ class Updater(QThread):
 
 
     def run(self):
+        #import stat #I'm having to re-import this for some reason. WTF?!
+        
+        
+        #def bad_path(m_path):
+            #if m_path == m_path.parent:
+                ##we're at the top of the harddrive
+                #return True
+            
+            #elif not m_path.exists():
+                #return bad_path(m_path.parent)
+            
+            #if not os.access(m_path, os.R_OK | os.W_OK | os.X_OK):
+                #print(f"Can't read/write to {m_path}. Check your user permissions.")
+                #return True
+            #return False
+                
+        #if bad_path(self.casc_install) or \
+           #bad_path(self.mod_file) or bad_path(self.maya_install) :
+            #print("Action Failed")
+            #return          
+        
+        
+                
+        #target_files = [self.casc_json]
+        #file_stats = [os.stat(f).st_mode for f in target_files]
+        
         print("*****************************************************")
         print(f"Python exe:  {self.mayapy}\n")
         print(f"CASC Settings:  {self.casc_json}")
@@ -430,11 +497,22 @@ class Updater(QThread):
         print("*****************************************************\n")
         
         try:
+            #for a_f in target_files:
+                #os.chmod(a_f, stat.S_IWRITE)            
+            
             self._run()
             print("*****************************************************")
             print("INSTALL COMPLETED SUCCESSFULLY !!")
             print("*****************************************************")
             self.update_complete.emit(True)
+        except PermissionError as e:
+            print("\n")
+            print("*****************************************************")
+            print(f"Installing FAILED !! : {e}")          
+            print("*****************************************************")
+            callstack = traceback.format_exc()
+            print(callstack)
+            self.permission_error.emit()
         except Exception as e:
             print("\n")
             print("*****************************************************")
@@ -443,7 +521,9 @@ class Updater(QThread):
             callstack = traceback.format_exc()
             print(callstack)            
             self.update_complete.emit(False)
-    
+        #finally:
+            #for idx, stat in enumerate(file_stats):
+                #os.chmod(target_files[idx], file_stats[idx])
     
     
 class Remover(QThread):
@@ -508,7 +588,7 @@ class Remover(QThread):
 
         os.chmod(self.casc_json, read_state)
 
-        print("Deleting folders")
+        print("Deleting folders. Please wait for success message.")
         shutil.rmtree(self.maya_install, ignore_errors=True)   
         shutil.rmtree(self.casc_install, ignore_errors=True)
         
@@ -622,12 +702,15 @@ class PathFinder(QRunnable):
         
 
 class Logger(QThread):
+    #logger : https://stackoverflow.com/questions/14058453/making-python-loggers-output-all-messages-to-stdout-in-addition-to-log-file
+    #https://betterstack.com/community/guides/logging/how-to-start-logging-with-python/    
     log_output = Signal(str)
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._loop = True
         self.output = ''
+        self.permission_error = False
     
     def write(self, input_string):
         self.output += input_string
@@ -663,9 +746,9 @@ class PathType(enum.Enum):
 
 
 class MainWindow(QWizard):
-    def __init__(self):
+    def __init__(self, *args):
         super(MainWindow, self).__init__()
-        
+
         self.ui = Ui_Wizard()
         self.ui.setupUi(self)
         self.logger = Logger()
@@ -713,6 +796,9 @@ class MainWindow(QWizard):
         self.ui.find_module_button.pressed.connect(self.find_modules)
         self.logger.log_output.connect(self.log)
         self.ui.console_spacer.setVisible(False)
+        
+        if args:
+            print(args)        
 
         
     def read_mod_file(self):
@@ -832,6 +918,21 @@ class MainWindow(QWizard):
         self.show_layout(self.ui.progress_group, False)
         
         
+    def permission_error(self):
+        self.install_complete(False)
+        print("----STOP!----Please read carefully.")
+        print("You don't have permission to write to the necessary directories.\nTo fix this you'll need to do 4 steps:")
+        print("1. Copy the path locations listed below")
+        print("2. Restart this application by right-clicking on the EXE and choosing 'Run as Adminstrator'")
+        print("3. Have someone with Adminstrator privileges complete the pop-up box")
+        print("4. Replace all default paths with the paths printed below. Use the Set button.")
+        print("-------------------")     
+        print(f"Cascaduer: Settings File: {self.casc_json_path}")
+        print(f"Cascaduer: Install Location: {self.casc_module_path}")
+        print(f"Maya: Module File: {self.maya_mod_file_path}")
+        print(f"Maya: Install Location: {self.maya_mod_install_path}")
+        
+        
     def find_modules(self):
         if not self.searching:
             #self.show_console(True)
@@ -923,16 +1024,16 @@ class MainWindow(QWizard):
         mod_installed = self.is_path(self.maya_mod_install_path.joinpath('scripts'))
         upgrading = casc_installed or mod_file_installed or mod_installed
         
-        if mod_file_installed and mod_installed:
-            self.ui.find_module_button.setVisible(False)
-            self.ui.maya_mod_value.setVisible(False)
-            self.ui.maya_mod_label.setVisible(False)
-        else:
-            self.ui.find_module_button.setVisible(True)
-            self.ui.maya_mod_value.setVisible(True)
-            self.ui.maya_mod_label.setVisible(True)
+        #if mod_file_installed and mod_installed:
+            #self.ui.find_module_button.setVisible(False)
+            ##self.ui.maya_mod_value.setVisible(False)
+            ##self.ui.maya_mod_label.setVisible(False)
+        #else:
+            #self.ui.find_module_button.setVisible(True)
+            #self.ui.maya_mod_value.setVisible(True)
+            #self.ui.maya_mod_label.setVisible(True)
             
-        self.ui.casc_json_set.setVisible(not cascadeur_ready)
+        #self.ui.casc_json_set.setVisible(not cascadeur_ready)
         
         if upgrading:
             self.ui.install_option.setText("Upgrade/Repair")
@@ -945,16 +1046,19 @@ class MainWindow(QWizard):
             self.ui.install_option.setVisible(False)
             self.ui.remove_option.setVisible(False)
 
-        if casc_installed:
-            self.ui.casc_install_set.setVisible(False)
-        else:
-            self.ui.casc_install_set.setVisible(True)
+        #This is dump, because if you run as admin, and the admin
+        #has a path then you can't set it to your local folders.
+        #if casc_installed:
+            #self.ui.casc_install_set.setVisible(False)
+        #else:
+            #self.ui.casc_install_set.setVisible(True)
             
-        if mod_file_installed:
-            self.ui.maya_mod_set.setVisible(False)
+        #if mod_file_installed:
+            #self.ui.maya_mod_set.setVisible(False)
             
-        if mod_installed:
-            self.ui.maya_install_set.setVisible(False)
+        #if mod_installed:
+            #self.ui.maya_install_set.setVisible(False)
+            
             
         if cascadeur_ready and maya_ready:
             if upgrading:
@@ -984,6 +1088,7 @@ class MainWindow(QWizard):
                 
             else:
                 print("Hit 'Next' to install.")
+                print("IF you know everything is already installed then hit the 'Advanced Search' button.")
                                  
         self.currentPage().isComplete()
 
@@ -1010,7 +1115,7 @@ class MainWindow(QWizard):
         self.ui.casc_json_value.setReadOnly(True)
         self.ui.casc_install_value.setReadOnly(True)
         self.ui.py_path_value.setReadOnly(True)
-        self.ui.maya_mod_value.setText("----FOR Advanced Users ONLY----")
+        #self.ui.maya_mod_value.setText("----FOR Advanced Users ONLY----")
         self.ui.maya_mod_value.setReadOnly(True)
         self.ui.maya_install_value.setReadOnly(True)
         self.show_layout(self.ui.progress_group, False)
@@ -1020,9 +1125,6 @@ class MainWindow(QWizard):
         
         self.currentPage().set_parent(self)
         self.page_one_init = True
-        #if True:
-            #self.update_status()
-            #return
         
         self.show_layout(self.ui.progress_group, False)
         #find cascaduer paths
@@ -1030,9 +1132,14 @@ class MainWindow(QWizard):
         if settings_json:
             self.casc_json_path = settings_json
             self.read_casc_settings()
-                    
+                        
         json_path = str(self.casc_json_path)
         self.ui.casc_json_value.setText(json_path)
+        
+        if not self.is_path(self.casc_module_path):
+            self.casc_module_path = get_default_casc_install()
+            
+        self.ui.casc_install_value.setText(str(self.casc_module_path)) 
      
         #find maya paths 
         maya_installs = get_maya_installs()
@@ -1044,28 +1151,21 @@ class MainWindow(QWizard):
             
             self.mayapy_path = maya_installs[version_keys[0]]
             self.ui.py_path_value.setText(str(self.mayapy_path))
-            
-        docs_path = get_user_docs_path()
-        if docs_path:
-            mod_path = docs_path.joinpath('maya', 'modules', 'cascadeur.mod')
-            if mod_path.exists():
-                self.maya_mod_file_path = mod_path
-                self.ui.maya_mod_value.setText(str(mod_path))
-                
-            maya_install_path = docs_path.joinpath('maya', 'modules', 'cascadeur')
-            if maya_install_path.exists():
-                self.maya_mod_install_path = maya_install_path
-                self.ui.maya_install_value.setText(str(maya_install_path))
-                
-            elif mod_path.exists():
-                #Let's open the mod file to find the location of the install
-                self.read_mod_file()
-            
+          
+            #self.casc_install = casc_install #if casc_install.is_absolute() else get_default_casc_install()
+        self.maya_mod_file_path = get_default_mod_file_path()
+        self.ui.maya_mod_value.setText(str(self.maya_mod_file_path))
+        
+        self.maya_mod_install_path = get_default_maya_install_path()
+        if not self.maya_mod_install_path.exists() and self.maya_mod_file_path.exists():
+            self.read_mod_file()
+        else:
+            self.ui.maya_install_value.setText(str(self.maya_mod_install_path))      
             
         self.update_status()
         
         
-    def install_complete(self, result):
+    def install_complete(self, successful):
         self.page_two.mark_complete()
         
         
@@ -1077,22 +1177,15 @@ class MainWindow(QWizard):
         if self.running_thread is not None and self.running_thread.isRunning():
             return
         
+        if not self.check_running_apps():
+            print("Action Skipped.  Due to running apps.")
+            return        
+        
         json_path = self.casc_json_path
         casc_mod_path = self.casc_module_path
         mod_file = self.maya_mod_file_path
         maya_mod_path = self.maya_mod_install_path
-        
-        def bad_path(m_path):
-            if not os.access(m_path, os.R_OK | os.W_OK):
-                print(f"Can't read/write to {m_path}")
-                return True
-            return False
                 
-        if bad_path(json_path) or bad_path(casc_mod_path) or\
-           bad_path(mod_file) or bad_path(maya_mod_path) :
-            print("Action Failed")
-            return
-        
         if self.test_location:
             folder_path = QFileDialog.getExistingDirectory(self, 'Pick install location')
             if not folder_path:
@@ -1106,14 +1199,15 @@ class MainWindow(QWizard):
             casc_mod_path = folder_path.joinpath('CG_3D_Guru', 'Cascadeur')
             mod_file = folder_path.joinpath('cascadeur.mod')
             maya_mod_path = folder_path.joinpath('maya_cascadeur')
-
-        
+            
+                    
         if self.ui.install_option.isChecked():
             self.running_thread = Updater(json_path, casc_mod_path,
                            self.mayapy_path, mod_file,
                            maya_mod_path, self.install_type)
             
             self.running_thread.update_complete.connect(self.install_complete)
+            self.running_thread.permission_error.connect(self.permission_error)
             self.running_thread.start()
         else:
             self.running_thread = Remover(json_path, casc_mod_path,
@@ -1133,7 +1227,6 @@ class MainWindow(QWizard):
             self.output_window = self.ui.result_output
             self.output_window.clear()
 
-            
             self.init_page_two()
             
             
@@ -1177,3 +1270,26 @@ def run():
 if __name__ == '__main__':
     #commandline auto-py-to-exe
     run()
+    
+    
+    #import ctypes, sys
+    
+    #def is_admin():
+        #return Path(__file__).parent.joinpath('user_paths.json').exists()
+        
+        ##try:
+            ##return ctypes.windll.shell32.IsUserAnAdmin()
+        ##except:
+            ##return False
+    
+    #if is_admin():
+        ## Code of your program here
+        #run()
+    #else:
+        #get_user_paths()
+        ## https://stackoverflow.com/questions/130763/request-uac-elevation-from-within-a-python-script
+        # Re-run the program with admin rights
+        ##ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, " ".join(sys.argv), None, 1)
+    
+    
+    
