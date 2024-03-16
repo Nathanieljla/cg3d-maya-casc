@@ -79,7 +79,7 @@ def _make_rig_info(scene, set_name, new_roots):
 def _create_data(scene, set_name, maya_id, new_roots):
     global MAYA_BEHAVIOUR_NAME
      
-    #make the seleciont/object set   
+    #make the selection/object set   
     obj = scene.create_object(set_name)
     behaviour = obj.add_behaviour('Dynamic', MAYA_BEHAVIOUR_NAME)
     data_prop = behaviour.get_property('datasWithSameNamesReadonly')
@@ -290,7 +290,11 @@ def _get_maya_sets(obj_list):
     return [obj for obj in obj_list if
             obj.get_behaviour_by_name(MAYA_BEHAVIOUR_NAME) is not None]
     
-
+    
+def _select_for_export(scene, new_selection):
+    scene.select(new_selection)
+    #scene.select_frame_range()
+    
     
 def _export(cmd_string):
     new_object = None
@@ -340,16 +344,20 @@ def _export(cmd_string):
         for root in roots:
             new_selection.extend(common.hierarchy.get_object_branch_inclusive(root, root.scene.dom_scene))
             
-        scene.edit('Change selection', lambda x: scene.select(new_selection))
+        scene.edit('Change selection', _select_for_export, new_selection)
 
         maya_beh =root_beh.get_siblings_by_name(MAYA_BEHAVIOUR_NAME)[0]
-        maya_id = maya_beh.datasWithSameNamesReadonly.get_by_name('maya_id')[0]
-        fbx_name = '{}.{}.fbx'.format(root_beh.object.name, maya_id.get())
-        export_path = str(temp_dir.joinpath(fbx_name))
-        
-        print("Exporting to {}".format(fbx_name))
-        #TODO: Change this to selection, once we know how to select a branch
-        fbx.export_fbx(export_path, fbx.FbxFilterType.SELECTED) #fbx.FbxFilterType.SCENE)
+        maya_id = maya_beh.datasWithSameNamesReadonly.get_by_name('maya_id')
+        if maya_id:
+            maya_id = maya_id[0]
+            fbx_name = '{}.{}.fbx'.format(root_beh.object.name, maya_id.get())
+            
+            export_path = str(temp_dir.joinpath(fbx_name))
+            
+            print("Exporting to {}".format(fbx_name))
+            
+            #TODO: Change this to selection, once we know how to select a branch
+            fbx.export_fbx(export_path, fbx.FbxFilterType.SELECTED) 
         
  
     import wingcarrier.pigeons

@@ -862,7 +862,6 @@ class ModuleManager(QThread):
         return installed
     
     
-    
     def post_action(self):
         if self.dev_branch:
             if self.upgrade_action:
@@ -880,7 +879,6 @@ class ModuleManager(QThread):
                 return True            
             else:
                 return self.post_install(self.action_succeeded)
-    
     
     
     def post_dev_upgrade(self, upgrade_succeeded: bool):
@@ -922,7 +920,6 @@ class ModuleManager(QThread):
         
         return True
     
-     
                 
     def install_pymel(self):
         """Installs pymel to a common Maya location"""
@@ -1281,8 +1278,7 @@ class MyInstaller(ModuleManager):
         
         self.nekki_dir = None
         self.my_data_dir = None
-        
-        
+                
     def clean_folder(self, path: str):
         folder = pathlib.Path(path)
         for child in folder.iterdir():
@@ -1291,8 +1287,6 @@ class MyInstaller(ModuleManager):
             else:
                 child.unlink() #missing_ok=True) #missing_ok doens't work for maya 2022
                 
-            
-        
     def pre_install(self):        
         super().pre_install()
 

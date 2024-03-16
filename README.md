@@ -1,3 +1,6 @@
+Please consider getting the installer from my [Gumroad account](https://3dcgguru.gumroad.com/l/jowgd) as this allows me to more easily announce updates and track the userbase.
+
+
 ![maya2024](https://img.shields.io/badge/Maya_2024-tested-brightgreen.svg)
 ![maya2023](https://img.shields.io/badge/Maya_2023-tested-brightgreen.svg)
 ![maya2022](https://img.shields.io/badge/Maya_2022-tested-brightgreen.svg)
@@ -23,7 +26,7 @@ If the tool gives you issues you can open the cascadeur.mod file in a text edito
 
 ## Drag & Drop
 The easiest way to install this application is to ...
-1. Click this File Link > [maya_casc_installer.py](https://github.com/Nathanieljla/cg3d-maya-casc/releases/download/v1.0.0/maya_casc_installer.py) < to download the installation python file.
+1. Click this File Link > [maya_casc_installer.py](https://github.com/Nathanieljla/cg3d-maya-casc/releases/download/v1.1.0/maya_casc_installer.py) < to download the installation python file.
 2. Drag-n-drop it from the browser into a maya-viewport. 
 This will automatically install all the dependencies without requiring admin privileges into your user-directory.
 3. Hit 'Install'.  If any pop-ups appear, say "yes" or "allow".  The installer will likely take 20+ seconds.
@@ -33,8 +36,23 @@ This will automatically install all the dependencies without requiring admin pri
  (you can say 'yes' to the question)
 
  # Revisions
+ ### 1.1.1
+ Updated to support Cascadeur 2024.1
+ Updated package dependencies to be version specific
  
- 1.0.1
- Bug fixes for Maya 2022
+ 
+ ### 1.1.0
+ 
+ Updated the installer to support upgrading if a previous install is found.
+ 
+ Added a preferences menu.
+ 
+ Added support for exporting sparse key data.
+ 
+ Fixed textures not being sent to Cascadeur in certain situations.
+ 
+ ### 1.0.1
+ 
+ Bug fixes for Maya 2022.
    
 
