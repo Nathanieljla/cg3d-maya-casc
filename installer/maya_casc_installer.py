@@ -104,24 +104,31 @@ def get_module_info(mayapy_path:Path)->Path:
 
 
 def process_id(process_name):
-    """Returns the process ID of the running cascadeur.exe or None"""
+    """Returns the process ID of the running process name or None"""
     
     import subprocess
     call = 'TASKLIST', '/FI', 'imagename eq %s' % process_name
-    # use buildin check_output right away
-    output = subprocess.check_output(call).decode()
 
-    # check in last line for process name
-    last_line = output.split('\r\n')
-    if len(last_line) < 3:
-        return None
+    output = subprocess.check_output(call)
+    try:
+        output = output.decode()
+    except UnicodeDecodeError:
+        output = output.decode('latin-1')
     
-    #first result is 3 because the headers
-    #or in case more than one, you can use the last one using [-2] index
-    data = " ".join(last_line[3].split()).split()  
-
-    #return a list with the name and pid 
-    return data[1]
+    search_expression = re.compile(r'{}\D*(?P<pid>\d+)(.*)'.format(process_name))
+    pids = []
+    for match in re.finditer(search_expression, output):
+        group_dict = match.groupdict()
+        pid = group_dict.get('pid', '')
+        if pid:
+            pids.append(int(pid))
+    
+    pid = None        
+    if pids:
+        pids.sort()
+        pid = pids[0]
+        
+    return pid
 
 
 
@@ -1178,7 +1185,7 @@ class MainWindow(QWizard):
             return
         
         if not self.check_running_apps():
-            print("Action Skipped.  Due to running apps.")
+            print("Action Skipped due to running apps.")
             return        
         
         json_path = self.casc_json_path
