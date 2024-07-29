@@ -1,6 +1,6 @@
 from .core import *
 from . import preferences
-from . import hik
+#from .core import hik
 
 VERSION = (1, 1, 2)
 

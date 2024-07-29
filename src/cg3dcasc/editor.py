@@ -6,6 +6,7 @@ from PySide2.QtWidgets import *
 
 import cg3dguru.ui
 import cg3dcasc
+import cg3dcasc.core.utils as utils
 
 WINDOW_NAME = 'HIK Export'
 
@@ -163,31 +164,32 @@ class HikExportEditor(cg3dguru.ui.Window):
             self._init_twist_data()
                 
                   
-    def _create_export_data(self):
-        node, data = cg3dcasc.CascExportData.create_node(nodeType = 'objectSet')
-        return node
+    #def _create_export_data(self):
+        #node, data = cg3dcasc.CascExportData.create_node(nodeType = 'objectSet')
+        #return node
                 
-
     def on_create_data(self, *args, **kwargs):
-        data_name, ok = QInputDialog.getText(None, "New Node Name", 'Name this data')
-        if not ok:
-            return
+        self.node_to_select = utils.create_export_set()
         
-        selection = pm.ls(sl=True)
+        #data_name, ok = QInputDialog.getText(None, "New Node Name", 'Name this data')
+        #if not ok:
+            #return
         
-        filtered_selection = pm.ls(sl=True,type=['transform','joint', 'skinCluster', 'mesh'])
-        new_node = self._create_export_data()
-        name = '{}_CSC_EXPORT'.format(data_name)
-        pm.rename(new_node, name)
-        self.node_to_select = new_node
+        #selection = pm.ls(sl=True)
         
-        pm.select(selection, replace=True)
+        #filtered_selection = pm.ls(sl=True,type=['transform','joint', 'skinCluster', 'mesh'])
+        #new_node, data = cg3dcasc.CascExportData.create_node(nodeType = 'objectSet')
+        #name = '{}_CSC_EXPORT'.format(data_name)
+        #pm.rename(new_node, name)
+        #self.node_to_select = new_node
         
-        if filtered_selection:
-            answer =  QMessageBox.question(self.mayaWindow, 'Add', 'Add the current selection?')
-            if answer == QMessageBox.StandardButton.Yes:
-                if filtered_selection:
-                    new_node.addMembers(filtered_selection)            
+        #pm.select(selection, replace=True)
+        
+        #if filtered_selection:
+            #answer =  QMessageBox.question(self.mayaWindow, 'Add', 'Add the current selection?')
+            #if answer == QMessageBox.StandardButton.Yes:
+                #if filtered_selection:
+                    #new_node.addMembers(filtered_selection)            
             
         self.init_ui()
         
@@ -216,7 +218,7 @@ class HikExportEditor(cg3dguru.ui.Window):
         char_name, ok = QInputDialog.getItem(None, "Select Character", "", names, 0, False)
         if ok:
             char_node = nodes[char_name]
-            node = self._create_export_data()
+            node = cg3dcasc.CascExportData.create_node(nodeType = 'objectSet')[0]
             name = '{}_CSC_EXPORT'.format(char_node.name())
             pm.rename(node, name)
             

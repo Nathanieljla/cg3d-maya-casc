@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>363</width>
-    <height>369</height>
+    <width>548</width>
+    <height>418</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -17,8 +17,11 @@
    <layout class="QVBoxLayout" name="verticalLayout_2">
     <item>
      <widget class="QWidget" name="options_group" native="true">
-      <layout class="QHBoxLayout" name="horizontalLayout_3">
-       <item>
+      <property name="toolTip">
+       <string notr="true"/>
+      </property>
+      <layout class="QGridLayout" name="gridLayout">
+       <item row="0" column="0" rowspan="4" colspan="2">
         <widget class="QLabel" name="bake_label">
          <property name="text">
           <string>Bake Animation   </string>
@@ -28,7 +31,47 @@
          </property>
         </widget>
        </item>
-       <item>
+       <item row="4" column="2">
+        <widget class="QComboBox" name="texture_choice">
+         <item>
+          <property name="text">
+           <string extracomment="Don't convert Textures">Never</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>Current</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>Project</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>Custom</string>
+          </property>
+         </item>
+        </widget>
+       </item>
+       <item row="4" column="1">
+        <widget class="QLabel" name="texture_label">
+         <property name="toolTip">
+          <string extracomment="Testing Tool Tips"/>
+         </property>
+         <property name="toolTipDuration">
+          <number>10</number>
+         </property>
+         <property name="text">
+          <string>Texture Save Location   </string>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="2" rowspan="4">
         <widget class="QComboBox" name="bake_choice">
          <item>
           <property name="text">

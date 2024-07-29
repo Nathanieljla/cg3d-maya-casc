@@ -8,5 +8,6 @@ ORDER = [
     'update',
     'send_to',
     'editor',
+    'utils',
     'preferences'
 ]
