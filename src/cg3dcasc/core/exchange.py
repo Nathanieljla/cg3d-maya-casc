@@ -1038,8 +1038,24 @@ def convert_texture(texture_path: pathlib.Path) -> bool:
 
 
 
-def get_textures(objs):
+def get_textures(objs, export_nodes = []):
     materials = {}
+    
+    
+    def _get_best_file_node(color_input):
+        nonlocal export_nodes
+        matches = []
+        for texture in color_input:
+            for export_node in export_nodes:
+                if texture in export_nodes[0].members(True):
+                    matches.append(texture)
+        
+        if matches:
+            return matches
+
+        #No matches were found so just return the original input
+        return color_input
+    
     
     shapes = pm.listRelatives(objs, s=True)
     shapes += pm.ls(objs, shapes=True)
@@ -1062,17 +1078,27 @@ def get_textures(objs):
                 color_input = pm.listConnections(color_attr, s=True, d=False)
                 if not color_input:
                     continue
+            
+                color_input = pm.findType(color_input, type='file', forward=False,deep =True)
+                if not color_input:
+                    continue
                 
-                color_input = color_input[0]
-                if pm.nodeType(color_input) == 'file':
-                    filepath = color_input.fileTextureName.get()
-                    if filepath:
-                        materials.setdefault(shape.getParent().name(), set()).add(filepath)
-                        #materials[shape.getParent().name()] = filepath
-    
+                if len(color_input) > 1:
+                    color_input = _get_best_file_node(color_input)
+                    
+                if len(color_input) != 1:
+                    pm.warning(f"Found multiple textures for '{color_attr}' skipping texture. Note: You can add the preferred file node to your export set to fix this.")
+                    continue
+
+                color_input = pm.PyNode(color_input[0])
+                filepath = color_input.fileTextureName.get()
+                if filepath:
+                    materials.setdefault(shape.getParent().name(), set()).add(filepath)
+                    
+
     for key, value in materials.items():
         materials[key] = list(value)
-                        
+
     return materials
 
 
@@ -1116,7 +1142,7 @@ def export(export_set=None, export_rig=False, cmd_string='', textures=True, only
         print("Exporting textures")
         for root in export_roots:
             branch = pm.listRelatives(root, allDescendents=True)
-            results = get_textures(branch)
+            results = get_textures(branch, export_nodes)
             texture_mappings.update(results)
             
         print(texture_mappings)

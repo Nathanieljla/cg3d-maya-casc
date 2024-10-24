@@ -64,7 +64,9 @@ def _clone_meshes(meshes, mesh_parent, skinned_parent, clone_pairing):
     mesh_cluster_mapping = exchange.get_mesh_cluster_mappings()
     
     for mesh in meshes:
-        clone = pm.duplicate(mesh, name=f"clone:{mesh.getParent().name()}")[0]
+        name = f"clone:{mesh.getParent().name()}"
+        print(name)
+        clone = pm.duplicate(mesh, name=name)[0]
         _map_clone(mesh, clone, clone_pairing)
 
         if mesh not in mesh_cluster_mapping:
@@ -152,55 +154,67 @@ def convert_textures():
     
 
 
-def derig_selection():
-    try:
+def wait_cursor(func):
+    def wrapper(*args, **kwargs):
         pm.waitCursor(state=True)
-        
-        selection = pm.ls(sl=True)
-        if not selection:
-            return
-        
-        results = exchange.get_skinned_data_sets(selection)
-        exchange.update_skinned_data_sets(*results)
-        joints, meshes, skin_clusters, transforms = results
+        result = None
+        try:
+            result = func(*args, **kwargs)
+        except Exception as e:
+            raise e
+        else:
+            return result
+        finally:
+            pm.waitCursor(state=False)
+
+    return wrapper    
     
-        joint_hierarchy = {}    
-        for joint in joints:
-            _make_joint_hierarchy(joint, joint.getParent(), joint_hierarchy)
-           
-        if not joint_hierarchy:
-            return
+    
+
+@wait_cursor
+def _derig_selection():
+    selection = pm.ls(sl=True)
+    if not selection:
+        return False
+    
+    results = exchange.get_skinned_data_sets(selection)
+    exchange.update_skinned_data_sets(*results)
+    joints, meshes, skin_clusters, transforms = results
+
+    joint_hierarchy = {}    
+    for joint in joints:
+        _make_joint_hierarchy(joint, joint.getParent(), joint_hierarchy)
+       
+    if not joint_hierarchy:
+        return False
+    
+    clone_pairing = {}
+    root = pm.general.createNode('transform', name = "clone:root")
+    skeleton_root = pm.general.createNode('transform', name = "clone:skel_root", parent=root)
+    _clone_joints(joint_hierarchy[None], skeleton_root, joint_hierarchy, clone_pairing)
+    
+    cloned_root_joints = [clone_pairing[joint] for joint in joint_hierarchy[None]]
+    
+    pm.general.select(cloned_root_joints, replace=True)
+    pm.general.makeIdentity(apply=True, t=0, r=1, s=0, n=0)
+    
+    meshes_root = pm.general.createNode('transform', name = "clone:meshes", parent=root)
+    skinned_meshes_root = pm.general.createNode('transform', name = "clone:skinned_meshes", parent=root)
+    skinned_meshes_root.inheritsTransform.set(0)
+    _clone_meshes(meshes, meshes_root, skinned_meshes_root, clone_pairing)
+    
+    null_children = [child for child in root.getChildren() if not child.getChildren()]
+    if null_children:
+        pm.general.delete(null_children)
         
-        clone_pairing = {}
-        root = pm.general.createNode('transform', name = "clone:root")
-        skeleton_root = pm.general.createNode('transform', name = "clone:skel_root", parent=root)
-        _clone_joints(joint_hierarchy[None], skeleton_root, joint_hierarchy, clone_pairing)
-        
-        cloned_root_joints = [clone_pairing[joint] for joint in joint_hierarchy[None]]
-        
-        pm.general.select(cloned_root_joints, replace=True)
-        pm.general.makeIdentity(apply=True, t=0, r=1, s=0, n=0)
-        
-        meshes_root = pm.general.createNode('transform', name = "clone:meshes", parent=root)
-        skinned_meshes_root = pm.general.createNode('transform', name = "clone:skinned_meshes", parent=root)
-        skinned_meshes_root.inheritsTransform.set(0)
-        _clone_meshes(meshes, meshes_root, skinned_meshes_root, clone_pairing)
-        
-        null_children = [child for child in root.getChildren() if not child.getChildren()]
-        if null_children:
-            pm.general.delete(null_children)
-            
-        pm.select(root, replace=True)
-        pm.waitCursor(state=False)
+    pm.select(root, replace=True)
+    return True
+
+
+def derig_selection():
+    if _derig_selection():
         create_export_set(auto_add_selected=True)        
         
-        
-    except Exception as e:
-        pm.waitCursor(state=False)
-        print(f"Failed to clone:{e}")
-        
-    
-    
     
     
 #import pymel.core as pm

@@ -12,8 +12,8 @@ import csc
 import rig_mode.on as rm_on
 import rig_mode.off as rm_off
 
-import cg3dguru
-import cg3dguru.general.fbx as fbx
+import pycsc as cg3dguru
+import pycsc.general.fbx as fbx
 
 
 MAYA_BEHAVIOUR_NAME = 'Maya Data'
@@ -50,7 +50,7 @@ def _make_rig_info(scene, set_name, new_roots):
     #make a rig info and select it.
     new_selection = []
     for root in new_roots:
-        new_selection.extend(common.hierarchy.get_object_branch_inclusive(root, root.scene.dom_scene))
+        new_selection.extend(common.hierarchy.get_object_branch_inclusive(root, root.scene))
         
     scene.edit('Change selection', lambda x: scene.select(new_selection))
     joints = scene.get_scene_objects(of_type='Joint')
@@ -179,14 +179,14 @@ def _load_textures(scene):
     
 def _import_maya(new_scene, import_filter: fbx.FbxFilterType):
     if new_scene:
-        scene = cg3dguru.new_scene()
+        scene = cg3dguru.new_scene().ds
     else:
-        scene = cg3dguru.get_current_scene()
+        scene = cg3dguru.get_current_scene().ds
 
-    scene.dom_scene.info("Importing Maya Data")
+    scene.info("Importing Maya Data")
     temp_dir = pathlib.Path(os.path.join(tempfile.gettempdir(), 'mayacasc'))
     if not temp_dir.exists():
-        scene.dom_scene.error("Can't find Maya data")
+        scene.error("Can't find Maya data")
         return
     
         
@@ -254,7 +254,7 @@ def _import_maya(new_scene, import_filter: fbx.FbxFilterType):
             if qrig_path:
                 _make_rig_info(scene, set_name, new_roots)
         else:
-            scene.dom_scene.info("Updated existing data")
+            scene.info("Updated existing data")
             
             
     _load_textures(scene)
@@ -292,7 +292,7 @@ def smart_import(new_scene):
     
     
 def update_textures():
-    scene = cg3dguru.get_current_scene()
+    scene = cg3dguru.get_current_scene().ds
     _load_textures(scene)
     
     
@@ -330,7 +330,7 @@ def _export(cmd_string):
     for child in temp_dir.iterdir():
         child.unlink(missing_ok=True)
         
-    scene = cg3dguru.get_current_scene()
+    scene = cg3dguru.get_current_scene().ds
     
     #See if we have an export set selected
     selected = scene.get_scene_objects(selected=True)
@@ -356,7 +356,7 @@ def _export(cmd_string):
         
         new_selection = []
         for root in roots:
-            new_selection.extend(common.hierarchy.get_object_branch_inclusive(root, root.scene.dom_scene))
+            new_selection.extend(common.hierarchy.get_object_branch_inclusive(root, root.scene))
             
         scene.edit('Change selection', _select_for_export, new_selection)
 
