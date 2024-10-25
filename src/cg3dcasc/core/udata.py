@@ -11,7 +11,23 @@ class ProxyData(cg3dguru.udata.BaseData):
             cg3dguru.udata.create_attr('proxySource', 'message'),
         ]
         
-        return attrs        
+        return attrs
+    
+    
+class ProxyRoot(cg3dguru.udata.BaseData):
+    root = 'Root'
+    joints = 'Joints'
+    meshes = 'Meshes'
+    skinned_meshes = 'skin'
+    
+    @staticmethod
+    def get_attributes():
+        enum_names = f"{root}:{joints}:{meshes}:{skinned_meshes}"
+        attrs = [
+            cg3dguru.udata.create_attr('rootType', 'enum', enumName= enum_names),
+        ]
+        
+        return attrs  
 
 
 class QRigData(cg3dguru.udata.BaseData):

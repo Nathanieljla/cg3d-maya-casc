@@ -9,7 +9,9 @@ from PySide2.QtGui import *
 
 import cg3dguru.ui
 from . import exchange
-from .udata import * 
+from .udata import *
+
+CLONE_PREFIX = 'Csc'
 
 
 
@@ -38,7 +40,7 @@ def _map_clone(org, clone, mapping):
         
 def _clone_joints(joint_list, parent, joint_hierarchy, clone_pairing):
     for joint in joint_list:
-        new_joint = pm.general.createNode('joint', name=f"clone:{joint.name()}", parent =parent, skipSelect=True)
+        new_joint = pm.general.createNode('joint', name=f"{CLONE_PREFIX}:{joint.name()}", parent =parent, skipSelect=True)
         _map_clone(joint, new_joint, clone_pairing)
         new_joint.radius.set(joint.radius.get())
         new_joint.setMatrix(joint.getMatrix(worldSpace=True), worldSpace=True)
@@ -64,8 +66,8 @@ def _clone_meshes(meshes, mesh_parent, skinned_parent, clone_pairing):
     mesh_cluster_mapping = exchange.get_mesh_cluster_mappings()
     
     for mesh in meshes:
-        name = f"clone:{mesh.getParent().name()}"
-        print(name)
+        name = f"{CLONE_PREFIX}:{mesh.getParent().name()}"
+
         clone = pm.duplicate(mesh, name=name)[0]
         _map_clone(mesh, clone, clone_pairing)
 
@@ -108,7 +110,7 @@ def create_export_set(name='', auto_add_selected=False) -> pm.nodetypes.ObjectSe
         if not ok:
             return None
         
-        name = '{}_CSC_EXPORT'.format(data_name)
+        name = f'{data_name}_CSC_EXPORT'
     
     selection = pm.ls(sl=True)
     filtered_selection = pm.ls(sl=True,type=['transform','joint', 'skinCluster', 'mesh'])
@@ -189,8 +191,8 @@ def _derig_selection():
         return False
     
     clone_pairing = {}
-    root = pm.general.createNode('transform', name = "clone:root")
-    skeleton_root = pm.general.createNode('transform', name = "clone:skel_root", parent=root)
+    root = pm.general.createNode('transform', name = f"{CLONE_PREFIX}:root")
+    skeleton_root = pm.general.createNode('transform', name = f"{CLONE_PREFIX}:skel_root", parent=root)
     _clone_joints(joint_hierarchy[None], skeleton_root, joint_hierarchy, clone_pairing)
     
     cloned_root_joints = [clone_pairing[joint] for joint in joint_hierarchy[None]]
@@ -198,8 +200,8 @@ def _derig_selection():
     pm.general.select(cloned_root_joints, replace=True)
     pm.general.makeIdentity(apply=True, t=0, r=1, s=0, n=0)
     
-    meshes_root = pm.general.createNode('transform', name = "clone:meshes", parent=root)
-    skinned_meshes_root = pm.general.createNode('transform', name = "clone:skinned_meshes", parent=root)
+    meshes_root = pm.general.createNode('transform', name = f"{CLONE_PREFIX}:meshes", parent=root)
+    skinned_meshes_root = pm.general.createNode('transform', name = f"{CLONE_PREFIX}:skinned_meshes", parent=root)
     skinned_meshes_root.inheritsTransform.set(0)
     _clone_meshes(meshes, meshes_root, skinned_meshes_root, clone_pairing)
     

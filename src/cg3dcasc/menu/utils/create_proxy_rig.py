@@ -1,6 +1,6 @@
 
 PARAMS = {
-    'label': 'Derig selection'
+    'label': 'Create Proxy From Selection'
 }
 
 
