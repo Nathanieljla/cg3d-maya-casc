@@ -15,6 +15,23 @@ CLONE_PREFIX = 'Csc'
 
 
 
+def wait_cursor(func):
+    def wrapper(*args, **kwargs):
+        pm.waitCursor(state=True)
+        result = None
+        try:
+            result = func(*args, **kwargs)
+        except Exception as e:
+            raise e
+        else:
+            return result
+        finally:
+            pm.waitCursor(state=False)
+
+    return wrapper   
+
+
+
 def _make_joint_hierarchy(joint, parent, joint_hierarchy):
     """Build a dict of parent keys, with children values
     
@@ -131,7 +148,7 @@ def create_export_set(name='', auto_add_selected=False) -> pm.nodetypes.ObjectSe
     return new_node
 
 
-
+@wait_cursor
 def convert_textures():
     #https://help.autodesk.com/view/MAYAUL/2024/ENU/?guid=MAYA_API_REF_cpp_ref_class_m_qt_util_html
     #https://stackoverflow.com/questions/72801366/maya-python-get-the-widget-containing-the-renderd-image-from-mayas-render-view
@@ -156,23 +173,6 @@ def convert_textures():
     
 
 
-def wait_cursor(func):
-    def wrapper(*args, **kwargs):
-        pm.waitCursor(state=True)
-        result = None
-        try:
-            result = func(*args, **kwargs)
-        except Exception as e:
-            raise e
-        else:
-            return result
-        finally:
-            pm.waitCursor(state=False)
-
-    return wrapper    
-    
-    
-
 @wait_cursor
 def _derig_selection():
     selection = pm.ls(sl=True)
@@ -192,17 +192,23 @@ def _derig_selection():
     
     clone_pairing = {}
     root = pm.general.createNode('transform', name = f"{CLONE_PREFIX}:root")
+    ProxyRoot.add_data(root).rootType.set(0)
+    
     skeleton_root = pm.general.createNode('transform', name = f"{CLONE_PREFIX}:skel_root", parent=root)
+    ProxyRoot.add_data(skeleton_root).rootType.set(1)
     _clone_joints(joint_hierarchy[None], skeleton_root, joint_hierarchy, clone_pairing)
     
     cloned_root_joints = [clone_pairing[joint] for joint in joint_hierarchy[None]]
-    
     pm.general.select(cloned_root_joints, replace=True)
     pm.general.makeIdentity(apply=True, t=0, r=1, s=0, n=0)
     
     meshes_root = pm.general.createNode('transform', name = f"{CLONE_PREFIX}:meshes", parent=root)
+    ProxyRoot.add_data(meshes_root).rootType.set(2)
+    
     skinned_meshes_root = pm.general.createNode('transform', name = f"{CLONE_PREFIX}:skinned_meshes", parent=root)
+    ProxyRoot.add_data(skinned_meshes_root).rootType.set(3)
     skinned_meshes_root.inheritsTransform.set(0)
+    
     _clone_meshes(meshes, meshes_root, skinned_meshes_root, clone_pairing)
     
     null_children = [child for child in root.getChildren() if not child.getChildren()]

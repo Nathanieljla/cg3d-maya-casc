@@ -22,7 +22,7 @@ class ProxyRoot(cg3dguru.udata.BaseData):
     
     @staticmethod
     def get_attributes():
-        enum_names = f"{root}:{joints}:{meshes}:{skinned_meshes}"
+        enum_names = f"{ProxyRoot.root}:{ProxyRoot.joints}:{ProxyRoot.meshes}:{ProxyRoot.skinned_meshes}"
         attrs = [
             cg3dguru.udata.create_attr('rootType', 'enum', enumName= enum_names),
         ]
