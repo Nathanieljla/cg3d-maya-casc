@@ -77,7 +77,7 @@ class QRigData(cg3dguru.udata.BaseData):
     
     
 class CascExportData(cg3dguru.udata.BaseData):
-    """A list for nodes that should always be sent to cascadeur
+    """A list for nodes that should always be sent to Cascadeur
     
     The CascExportData.exportNodes attribute can store meshes, joints, and
     skinClusters. Meshes, joints and skinClusters will be inspected to find

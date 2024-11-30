@@ -11,7 +11,7 @@ import cg3dguru.ui
 from . import exchange
 from .udata import *
 
-CLONE_PREFIX = 'Csc'
+CLONE_PREFIX = 'CASC'
 
 
 
@@ -192,7 +192,8 @@ def _derig_selection():
     
     clone_pairing = {}
     root = pm.general.createNode('transform', name = f"{CLONE_PREFIX}:root")
-    ProxyRoot.add_data(root).rootType.set(0)
+    data = ProxyRoot.add_data(root)
+    data.rootType.set(0)
     
     skeleton_root = pm.general.createNode('transform', name = f"{CLONE_PREFIX}:skel_root", parent=root)
     ProxyRoot.add_data(skeleton_root).rootType.set(1)
@@ -217,6 +218,39 @@ def _derig_selection():
         
     pm.select(root, replace=True)
     return True
+
+
+
+
+def constrain_proxy():
+    import cg3dguru.udata
+    data_nodes = cg3dguru.udata.Utils.get_nodes_with_data(data_class=ProxyRoot)
+    joint_roots = [joint_root for joint_root in data_nodes if joint_root.rootType.get() == 1]
+    
+    joint_root = None
+    proxy_joints = []
+    if not joint_roots:
+        pm.error("No proxy data found.")
+        return
+    
+    elif len(joint_roots) > 2:
+        #We have mulltiple proxies in the scene, so we need to do some extra work to find the right proxy
+        export_nodes = exchange.get_export_nodes()
+        pm.warning("add support for finding one of many proxy rigs")
+        
+    else:
+        joint_root = joint_roots[0]
+        
+        
+    proxy_data = cg3dguru.udata.Utils.get_nodes_with_data(pm.listRelatives(joint_roots, allDescendents =True), data_class=ProxyData)
+    for proxy in proxy_data:
+        source = proxy.proxySource.get()
+        if source:
+            pm.parentConstraint(source, proxy, maintainOffset =True)
+    
+        
+        
+
 
 
 def derig_selection():

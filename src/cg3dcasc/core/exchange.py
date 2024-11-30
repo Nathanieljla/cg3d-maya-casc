@@ -1103,6 +1103,15 @@ def get_textures(objs, export_nodes = []):
 
 
 
+def get_export_nodes():
+    scene_sets = pm.ls(sl=True, type='objectSet')
+    if not scene_sets:
+        scene_sets = pm.ls(type='objectSet')
+    
+    return cg3dguru.udata.Utils.get_nodes_with_data(scene_sets, data_class=CascExportData)    
+
+
+
 def export(export_set=None, export_rig=False, cmd_string='', textures=True, only_textures=False):
     if cmd_string and not wingcarrier.pigeons.CascadeurPigeon().can_dispatch():
         pm.confirmDialog(message="Please launch Cascadeur, then try again.",button=['Okay'])
@@ -1120,12 +1129,13 @@ def export(export_set=None, export_rig=False, cmd_string='', textures=True, only
 
     if export_set:
         export_nodes = [export_set]
-    else:   
-        scene_sets = pm.ls(sl=True, type='objectSet')
-        if not scene_sets:
-            scene_sets = pm.ls(type='objectSet')
+    else:
+        export_nodes = get_export_nodes()
+        #scene_sets = pm.ls(sl=True, type='objectSet')
+        #if not scene_sets:
+            #scene_sets = pm.ls(type='objectSet')
         
-        export_nodes = cg3dguru.udata.Utils.get_nodes_with_data(scene_sets, data_class=CascExportData)
+        #export_nodes = cg3dguru.udata.Utils.get_nodes_with_data(scene_sets, data_class=CascExportData)
         if not export_nodes:
             #There's nothing to export in the scene, so let's build a default set.
             export_nodes = [_build_default_set()]
