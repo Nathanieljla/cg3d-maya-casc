@@ -4,6 +4,14 @@ import pathlib
 import re
 
 
+bridge_package_dependencies = {
+    '1.1.2': {
+        'maya': ['wing-carrier>=1.1.1', 'cg3d-maya-core>=0.6.2', 'cg3d-maya-casc>=1.1.2'],
+        'casc': ['wing-carrier>=1.1.1', 'cg3d-casc-core>=0.6.0'],
+    },
+}
+
+
 class ModuleDefinition(object):
     """A .mod file can have multiple entries. Each definition equates to one entry"""
     
