@@ -2,7 +2,12 @@
 import os
 
 import pymel.core as pm
-from PySide2.QtWidgets import *
+
+try:
+    from PySide2.QtWidgets import *
+except:
+    from PySide6.QtWidgets import *
+    
 
 import cg3dguru.ui
 import cg3dcasc
