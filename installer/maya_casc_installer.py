@@ -328,7 +328,7 @@ class Updater(QThread):
             if self.install_type == InstallType.GIT:
                 package = r'https://github.com/Nathanieljla/cg3d-maya-casc/archive/refs/heads/main.zip'
             elif self.install_type == InstallType.TEST_RELEASE:
-                package = 'cg3d-maya-casc'
+                package = 'cg3d-maya-casc==1.1.3rc1'
                 
             self._install(package, maya_scripts_path)
     
@@ -343,7 +343,7 @@ class Updater(QThread):
             if self.install_type == InstallType.TEST_RELEASE:
                 #Install wingcarrier & cg3d-maya-core (without dependencies), and pymel 
                 self._install('wing-carrier==1.1.1', maya_scripts_path)
-                self._install('cg3d-maya-core==0.6.2rc1', maya_scripts_path)
+                self._install('cg3d-maya-core==0.7.0', maya_scripts_path)
                
                 cmds = [str(self.mayapy), '-m', 'pip', 'install', 'pymel', f'--target={str(maya_scripts_path)}', '--upgrade', '--force-reinstall']
                 self._run_pip(cmds)
