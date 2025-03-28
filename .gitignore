@@ -162,3 +162,4 @@ src/cg3dcasc/casc-site/cg3dcmds/connect_wing.py
 src/cg3dcasc/preferences/prefs.pickle
 src/cg3dcasc/new_installer.py
 *.pickle
+installer/user_paths.json
