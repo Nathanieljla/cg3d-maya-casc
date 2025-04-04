@@ -4,6 +4,16 @@ import uuid
 import cg3dguru.udata
 
 
+class CascadeurTextures(cg3dguru.udata.BaseData):
+    @staticmethod
+    def get_attributes():
+        attrs = [
+            cg3dguru.udata.create_attr('textures', 'Int32Array'),
+        ]
+        
+        return attrs
+
+
 class ProxyData(cg3dguru.udata.BaseData):
     @staticmethod
     def get_attributes():
@@ -18,7 +28,7 @@ class ProxyRoot(cg3dguru.udata.BaseData):
     root = 'Root'
     joints = 'Joints'
     meshes = 'Meshes'
-    skinned_meshes = 'skin'
+    skinned_meshes = 'Skin'
     
     @staticmethod
     def get_attributes():

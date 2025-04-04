@@ -28,21 +28,37 @@ def wait_cursor(func):
         finally:
             pm.waitCursor(state=False)
 
-    return wrapper   
+    return wrapper
 
 
 
-def _make_joint_hierarchy(joint, parent, joint_hierarchy):
+def _get_parent_joint(joint):
+    parent = joint.getParent()
+    while not isinstance(parent, pm.nodetypes.Joint) and parent is not None:
+        parent = parent.getParent()
+        
+    return parent
+
+
+
+def _make_joint_hierarchy(joint, joint_hierarchy):
     """Build a dict of parent keys, with children values
     
-    This skips anything in the hierarchy that isn't a jointe
+    This skips anything in the hierarchy that isn't a joint
     """
-    if parent is None:
-        joint_hierarchy.setdefault(None, []).append(joint)
-    elif isinstance(parent, pm.nodetypes.Joint):
-        joint_hierarchy.setdefault(parent, []).append(joint)
-    else:
-        _make_joint_hierarchy(joint, parent.getParent(), joint_hierarchy)
+    parent = joint.getParent()
+    if not isinstance(parent, pm.nodetypes.Joint):
+        parent = _get_parent_joint(joint)
+        
+    #The if joint parent pair has already been processed, we don't need to do
+    #anything
+    if parent in joint_hierarchy and joint in joint_hierarchy[parent]:
+        return
+        
+    joint_hierarchy.setdefault(parent, set()).add(joint)
+    if parent is not None:
+        _make_joint_hierarchy(parent, joint_hierarchy)
+
         
         
         
@@ -109,18 +125,24 @@ def _clone_meshes(meshes, mesh_parent, skinned_parent, clone_pairing):
                 cw = cloned_cluster.wl.elementByPhysicalIndex(weight.index())
                 wws = weight.weights
                 cws = cw.weights
+                
                 #clear all the weights
-                for i in range(0, cws.numElements()):cws.elementByPhysicalIndex(i).set(0)
+                for i in range(0, cws.numElements()):
+                    cws.elementByPhysicalIndex(i).set(0)
                 
                 for e in wws:
-                    target = cws.elementByLogicalIndex(index_mapping[e.index()])
+                    index = e.index()
+                    if index not in index_mapping:
+                        pm.error(f"Index issue was found for skinned mesh {mesh}.  Index value:{index}.")
+                        continue
+                    
+                    target = cws.elementByLogicalIndex(index_mapping[index])
                     target.set(e.get())
        
             pm.animation.skinCluster(cloned_cluster, normalizeWeights =1, edit=True)
             
             
-            
-            
+
 def create_export_set(name='', auto_add_selected=False) -> pm.nodetypes.ObjectSet | None:
     if not name:
         data_name, ok = QInputDialog.getText(None, "New Node Name", 'Name this data')
@@ -146,6 +168,7 @@ def create_export_set(name='', auto_add_selected=False) -> pm.nodetypes.ObjectSe
             new_node.addMembers(filtered_selection)
             
     return new_node
+
 
 
 @wait_cursor
@@ -185,10 +208,14 @@ def _derig_selection():
 
     joint_hierarchy = {}    
     for joint in joints:
-        _make_joint_hierarchy(joint, joint.getParent(), joint_hierarchy)
-       
+        _make_joint_hierarchy(joint, joint_hierarchy)
+        
     if not joint_hierarchy:
         return False
+    
+    for key in joint_hierarchy.keys():
+        joint_hierarchy[key] = list(joint_hierarchy[key])
+    
     
     clone_pairing = {}
     root = pm.general.createNode('transform', name = f"{CLONE_PREFIX}:root")
@@ -221,7 +248,6 @@ def _derig_selection():
 
 
 
-
 def constrain_proxy():
     import cg3dguru.udata
     data_nodes = cg3dguru.udata.Utils.get_nodes_with_data(data_class=ProxyRoot)
@@ -248,14 +274,11 @@ def constrain_proxy():
         if source:
             pm.parentConstraint(source, proxy, maintainOffset =True)
     
-        
-        
-
 
 
 def derig_selection():
     if _derig_selection():
-        create_export_set(auto_add_selected=True)        
+        create_export_set(auto_add_selected=True)
         
     
     

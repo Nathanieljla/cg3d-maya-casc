@@ -7,5 +7,5 @@
 DIVIDER = ''
 
 def command(*args, **kwargs):
-    import cg3dcasc 
+    import cg3dcasc
     cg3dcasc.utils.convert_textures()
