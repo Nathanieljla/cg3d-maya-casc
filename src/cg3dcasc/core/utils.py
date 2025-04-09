@@ -166,14 +166,16 @@ def _clone_meshes(meshes, mesh_parent, skinned_parent, clone_pairing):
     mesh_copies = {}
     
     for mesh in meshes:
+        pm.displayInfo(f"Cleaning proxy of {mesh.name()}")
         copies = _make_clean_copy(mesh, mesh_cluster_mapping, clean_skins_group)
         mesh_copies[mesh] = copies
         
     #Update to get the latest clusters generated from our skin proxies
     mesh_cluster_mapping = exchange.get_mesh_cluster_mappings()    
     for mesh, copies in mesh_copies.items():
+        pm.displayInfo(f"Finalizing proxy for {mesh.name()}")
+        
         clone, skin_proxy = copies
-
         _map_clone(mesh, clone, clone_pairing)
 
         if mesh not in mesh_cluster_mapping:
