@@ -93,15 +93,87 @@ def _get_index_mapping(source_cluster, cloned_cluster, clone_pairing):
         
     return index_mapping
     
+      
+      
+def _lock_transform(obj, state):
+    pm.setAttr(obj.translateX, lock=state)
+    pm.setAttr(obj.translateY, lock=state)
+    pm.setAttr(obj.translateZ, lock=state)
+    pm.setAttr(obj.rotateX, lock=state)
+    pm.setAttr(obj.rotateY, lock=state)
+    pm.setAttr(obj.rotateZ, lock=state)
+    pm.setAttr(obj.scaleX, lock=state)
+    pm.setAttr(obj.scaleY, lock=state)
+    pm.setAttr(obj.scaleZ, lock=state)
+    
+    
+    
+def _Unhide_primary_attrs(obj):
+    pm.setAttr(obj.translateX, keyable=True)
+    pm.setAttr(obj.translateY, keyable=True)
+    pm.setAttr(obj.translateZ, keyable=True)
+    pm.setAttr(obj.rotateX, keyable=True)
+    pm.setAttr(obj.rotateY, keyable=True)
+    pm.setAttr(obj.rotateZ, keyable=True)
+    pm.setAttr(obj.scaleX, keyable=True)
+    pm.setAttr(obj.scaleY, keyable=True)
+    pm.setAttr(obj.scaleZ, keyable=True)
+    pm.setAttr(obj.visibility, keyable=True)
+    
+    _lock_transform(obj, False)
+    pm.setAttr(obj.visibility, lock=False)
+    
+    
+
+def _make_clean_copy(mesh, mesh_cluster_mapping, temp_parent=None):
+    name = f"{CLONE_PREFIX}:{mesh.getParent().name()}_TEMP"
+    
+    skin_proxy = pm.duplicate(mesh, name=name)[0]
+    
+    #Freeze any scale that might be on the mesh
+    _lock_transform(skin_proxy, False)
+    pm.makeIdentity(skin_proxy, apply=True, t=True, r=True, s=True, n=False, pn=True)
+    pm.parent(skin_proxy, world=True)
+    pm.makeIdentity(skin_proxy, apply=True, t=True, r=True, s=True, n=False, pn=True)
+    pm.delete(skin_proxy, constructionHistory=True)
+    
+    clone_name = f"{CLONE_PREFIX}:{mesh.getParent().name()}"
+    clone = pm.duplicate(skin_proxy, name=clone_name)[0]
+    _Unhide_primary_attrs(clone)
+    
+    if temp_parent is not None:
+        skin_proxy.setParent(temp_parent)
+    
+    if mesh in mesh_cluster_mapping:
+        for cluster in mesh_cluster_mapping[mesh]:
+            mi = pm.animation.skinCluster(cluster, maximumInfluences=True, query=True)
+            influences = pm.animation.skinCluster(cluster, influence=True, query=True)
+            
+            cloned_cluster = pm.animation.skinCluster(*influences, skin_proxy, mi=mi)
+            pm.copySkinWeights(ss=cluster, ds=cloned_cluster, noMirror=True,
+                               surfaceAssociation='closestPoint', influenceAssociation='closestJoint')
+            
+            pm.select(skin_proxy, replace=True)
+            pm.mel.removeUnusedInfluences()
+    
+    return (clone, skin_proxy)
+    
             
             
 def _clone_meshes(meshes, mesh_parent, skinned_parent, clone_pairing):
     mesh_cluster_mapping = exchange.get_mesh_cluster_mappings()
+    clean_skins_group = pm.general.createNode('transform', name = f"{CLONE_PREFIX}:CLEAN_SKINS")
+    mesh_copies = {}
     
     for mesh in meshes:
-        name = f"{CLONE_PREFIX}:{mesh.getParent().name()}"
+        copies = _make_clean_copy(mesh, mesh_cluster_mapping, clean_skins_group)
+        mesh_copies[mesh] = copies
+        
+    #Update to get the latest clusters generated from our skin proxies
+    mesh_cluster_mapping = exchange.get_mesh_cluster_mappings()    
+    for mesh, copies in mesh_copies.items():
+        clone, skin_proxy = copies
 
-        clone = pm.duplicate(mesh, name=name)[0]
         _map_clone(mesh, clone, clone_pairing)
 
         if mesh not in mesh_cluster_mapping:
@@ -109,7 +181,7 @@ def _clone_meshes(meshes, mesh_parent, skinned_parent, clone_pairing):
             continue
 
         clone.setParent(skinned_parent)
-        for cluster in mesh_cluster_mapping[mesh]:
+        for cluster in mesh_cluster_mapping[skin_proxy.getShape()]:
             mi = pm.animation.skinCluster(cluster, maximumInfluences=True, query=True)
             influences = pm.animation.skinCluster(cluster, influence=True, query=True)         
  
@@ -133,13 +205,16 @@ def _clone_meshes(meshes, mesh_parent, skinned_parent, clone_pairing):
                 for e in wws:
                     index = e.index()
                     if index not in index_mapping:
-                        pm.error(f"Index issue was found for skinned mesh {mesh}.  Index value:{index}.")
+                        pm.error(f"Index issue was found for skinned mesh {skin_proxy}.  Index value:{index}.")
                         continue
                     
                     target = cws.elementByLogicalIndex(index_mapping[index])
                     target.set(e.get())
        
             pm.animation.skinCluster(cloned_cluster, normalizeWeights =1, edit=True)
+            
+            
+    pm.delete(clean_skins_group)
             
             
 
@@ -243,6 +318,10 @@ def _derig_selection():
     if null_children:
         pm.general.delete(null_children)
         
+    constraints = [child for child in pm.listRelatives(root, allDescendents =True, type="transform") if isinstance(child, pm.nodetypes.Constraint)]
+    if constraints:
+        pm.general.delete(constraints) 
+    
     pm.select(root, replace=True)
     return True
 
