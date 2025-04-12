@@ -152,23 +152,14 @@ def _load_textures(scene):
                 container = obj.TextureContainer
                 textures = container.texture_paths.get()
                 for texture in textures:
-                    container.texture_paths.delete(texture)
-                    
+                    d_id = texture.id
+                    container.texture_paths.remove(texture)
+                    container.de.delete_data(d_id)
+                    delete_data
                 for idx, filename in enumerate(filenames):
                     data_name = f"texture {idx}"
                     container.texture_paths.create_data(data_name, csc.model.DataMode.Static, filename, group_name='maya_textures')
                     
-                #filename = texture_mapping[obj.name]
-                #if not obj.has_behaviour('TextureContainer'):
-                    #obj.add_behaviour('TextureContainer')
-                    
-                #data = obj.TextureContainer.texture_paths.get_by_name('texture 0')
-                #if data:
-                    #data[0].set(filename)
-                #else:
-                    #obj.TextureContainer.start_frame.create_data('Start frame', csc.model.DataMode.Static, 0, group_name='maya_textures')
-                    #data = obj.create_data('texture 0', csc.model.DataMode.Static, filename, group_name='maya_textures')
-                    #obj.TextureContainer.texture_paths.add(data.id)
                     
                 obj.MeshObject.textures.set(obj.TextureContainer)
      

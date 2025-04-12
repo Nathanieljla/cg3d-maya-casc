@@ -288,6 +288,7 @@ def _derig_selection():
         _make_joint_hierarchy(joint, joint_hierarchy)
         
     if not joint_hierarchy:
+        pm.warning("Please select one or more skinned meshes.")
         return False
     
     for key in joint_hierarchy.keys():
