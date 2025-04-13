@@ -9,9 +9,17 @@ import os
 import pathlib
 
 from maya import OpenMayaUI as omui 
-from shiboken2 import wrapInstance
-from PySide2.QtWidgets import *
-from PySide2.QtGui import *
+
+
+#try:
+    ##from PySide2.QtWidgets import *
+    ##from PySide2.QtGui import *
+    #from shiboken2 import wrapInstance
+#except:
+    ##from PySide6.QtWidgets import *
+    ##from PySide6.QtGui import *
+    #from shiboken6 import wrapInstance
+    
 
 import pymel.core as pm
 from . import hik
@@ -1022,19 +1030,19 @@ def _build_default_set():
 
 
 
-def convert_texture(texture_path: pathlib.Path) -> bool:
-    success = False
-    try:         
-        pp = omui.MQtUtil.createPixmap(texture_path)
-        pmap = wrapInstance( int(pp), QPixmap)
-        image = pmap.toImage()
-        save_name = texture_path.with_suffix('.png')
-        image.save(str(save_name))
-        success = True
-    except Exception as e:
-        print(e)
+#def convert_texture(texture_path: pathlib.Path) -> bool:
+    #success = False
+    #try:         
+        #pp = omui.MQtUtil.createPixmap(texture_path)
+        #pmap = wrapInstance( int(pp), QPixmap)
+        #image = pmap.toImage()
+        #save_name = texture_path.with_suffix('.png')
+        #image.save(str(save_name))
+        #success = True
+    #except Exception as e:
+        #print(e)
         
-    return success
+    #return success
 
 
 

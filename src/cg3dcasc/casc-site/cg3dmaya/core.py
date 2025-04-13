@@ -155,7 +155,7 @@ def _load_textures(scene):
                     d_id = texture.id
                     container.texture_paths.remove(texture)
                     container.de.delete_data(d_id)
-                    delete_data
+                    
                 for idx, filename in enumerate(filenames):
                     data_name = f"texture {idx}"
                     container.texture_paths.create_data(data_name, csc.model.DataMode.Static, filename, group_name='maya_textures')

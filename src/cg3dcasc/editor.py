@@ -30,6 +30,9 @@ class DropLineEdit(QLineEdit):
         if not entries or len(entries) != 1:
             return
         
+        #Why am I only limiting this to joints?  why have a method that verifies all the
+        #supported types?  Let's keep this as is for now, until I can give this more thought.
+        #there must have been a reason!...?
         node = pm.PyNode(entries[0])
         if node.type() != 'joint':
             return
@@ -349,7 +352,7 @@ class HikExportEditor(cg3dguru.ui.Window):
             selected_character_nodes[0].message >> data.characterNode
             added_character_node = True
             
-        selection = pm.ls(sl=True,type=['transform','joint', 'skinCluster', 'mesh'])
+        selection = pm.ls(sl=True,type=['transform','joint', 'skinCluster', 'mesh', 'file'])
         if selection:
             object_set.addMembers(selection)
                     
@@ -506,7 +509,7 @@ class HikExportEditor(cg3dguru.ui.Window):
         names = []
         
         for node in object_set.flattened():
-            if cg3dcasc.node_type_exportable(node):
+            if cg3dcasc.node_type_exportable(node) or isinstance(node, pm.nodetypes.File):
                 self.extras[node.name()] = node
                 names.append(node.name())
 

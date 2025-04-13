@@ -1,11 +1,18 @@
 from pathlib import Path
 
 from maya import OpenMayaUI as omui 
-from shiboken2 import wrapInstance
-
 import pymel.core as pm
-from PySide2.QtWidgets import *
-from PySide2.QtGui import * 
+
+
+try:
+    from PySide2.QtWidgets import *
+    from PySide2.QtGui import *
+    from shiboken2 import wrapInstance
+except:
+    from PySide6.QtWidgets import *
+    from PySide6.QtGui import *
+    from shiboken6 import wrapInstance   
+
 
 import cg3dguru.ui
 from . import exchange
