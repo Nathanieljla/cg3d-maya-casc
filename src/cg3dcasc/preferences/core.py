@@ -10,7 +10,7 @@ class OptionEnum(enum.Enum):
     NEVER = 'Never'
     ALWAYS = 'Always'
     ASK = 'Ask'
-
+    
 
 class TextureConversionType(enum.Enum):
     NEVER = 'Never'
@@ -30,17 +30,23 @@ class _PreferenceData(object):
     def __init__(self, old_prefs = None):
         self.bake_animations = OptionEnum.ALWAYS
         self.texture_conversion = TextureConversionType.NEVER
+        self.derig_reset_joint_scale = True
+        self.derig_maintain_offset = False
         
         if old_prefs is not None:
-            _PreferenceData.clone(self, old_prefs)
+            try:
+                _PreferenceData.clone(self, old_prefs)
+            except Exception as e:
+                print(e)
                   
     @staticmethod
     def clone(new, old):
         new.bake_animations = getattr(old, 'bake_animations') if hasattr(old, 'bake_animations') else new.bake_animations
         new.texture_conversion = getattr(old, 'texture_conversion') if hasattr(old, 'texture_conversion') else new.texture_conversion
+        new.derig_reset_joint_scale = getattr(old, 'derig_reset_joint_scale') if hasattr(old, 'derig_reset_joint_scale') else new.derig_reset_joint_scale
+        new.derig_maintain_offset = getattr(old, 'derig_maintain_offset') if hasattr(old, 'derig_maintain_offset') else new.derig_maintain_offset
         
         
-
 def _get_save_path():
     saved_data = pathlib.Path(__file__)
     saved_data = saved_data.parent

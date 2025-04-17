@@ -20,6 +20,8 @@ from .udata import *
 
 CLONE_PREFIX = 'CASC'
 
+from cg3dcasc import preferences
+
 
 
 def wait_cursor(func):
@@ -74,16 +76,33 @@ def _map_clone(org, clone, mapping):
     mapping[clone] = org
     
     ProxyData.add_data(clone)
-    org.message >> clone.proxySource    
+    org.message >> clone.proxySource
+    
+    
+def new_world_matrix(transform, reset_scale):
+
+    # Create a new matrix with scale set to (1, 1, 1)
+    new_matrix = pm.datatypes.TransformationMatrix(transform.getMatrix(worldSpace=True))
+    if reset_scale:
+        new_matrix.setScale((1, 1, 1), space='world')
+    
+    return new_matrix
         
+
+def get_base_name(obj):
+    return obj.name().split(":")[-1]
         
         
 def _clone_joints(joint_list, parent, joint_hierarchy, clone_pairing):
+    reset_scale = preferences.get().derig_reset_joint_scale
+    
     for joint in joint_list:
-        new_joint = pm.general.createNode('joint', name=f"{CLONE_PREFIX}:{joint.name()}", parent =parent, skipSelect=True)
+        new_joint = pm.general.createNode('joint', name=f"{CLONE_PREFIX}:{get_base_name(joint)}", parent=parent, skipSelect=True)
         _map_clone(joint, new_joint, clone_pairing)
         new_joint.radius.set(joint.radius.get())
-        new_joint.setMatrix(joint.getMatrix(worldSpace=True), worldSpace=True)
+        
+        jm = new_world_matrix(joint, reset_scale)
+        new_joint.setMatrix(jm, worldSpace=True)
         
         children = joint_hierarchy.get(joint, [])
         if children:
@@ -133,7 +152,8 @@ def _Unhide_primary_attrs(obj):
     
 
 def _make_clean_copy(mesh, mesh_cluster_mapping, temp_parent=None):
-    name = f"{CLONE_PREFIX}:{mesh.getParent().name()}_TEMP"
+    base_name = get_base_name(mesh.getParent())
+    name = f"{CLONE_PREFIX}:{base_name}_TEMP"
     
     skin_proxy = pm.duplicate(mesh, name=name)[0]
     
@@ -143,8 +163,9 @@ def _make_clean_copy(mesh, mesh_cluster_mapping, temp_parent=None):
     pm.parent(skin_proxy, world=True)
     pm.makeIdentity(skin_proxy, apply=True, t=True, r=True, s=True, n=False, pn=True)
     pm.delete(skin_proxy, constructionHistory=True)
+
     
-    clone_name = f"{CLONE_PREFIX}:{mesh.getParent().name()}"
+    clone_name = f"{CLONE_PREFIX}:{base_name}"
     clone = pm.duplicate(skin_proxy, name=clone_name)[0]
     _Unhide_primary_attrs(clone)
     
@@ -339,6 +360,7 @@ def _derig_selection():
 
 def constrain_proxy():
     import cg3dguru.udata
+
     data_nodes = cg3dguru.udata.Utils.get_nodes_with_data(data_class=ProxyRoot)
     joint_roots = [joint_root for joint_root in data_nodes if joint_root.rootType.get() == 1]
     
@@ -356,31 +378,31 @@ def constrain_proxy():
     else:
         joint_root = joint_roots[0]
         
-        
+
+    maintain_offset = preferences.get().derig_maintain_offset
     proxy_data = cg3dguru.udata.Utils.get_nodes_with_data(pm.listRelatives(joint_roots, allDescendents =True), data_class=ProxyData)
     for proxy in proxy_data:
         source = proxy.proxySource.get()
         if source:
-            pm.parentConstraint(source, proxy, maintainOffset =True)
+            pm.parentConstraint(source, proxy, maintainOffset=maintain_offset)
     
 
 
 def derig_selection():
+    selection = pm.ls(sl=True)
+    if not selection:
+        pm.warning("Please select meshes and/or joints for cloning")
+        return
+    
+    data_name, ok = QInputDialog.getText(None, "Name this character", 'Unique namespace')
+    if not ok:
+        return None    
+    
+    global CLONE_PREFIX
+    CLONE_PREFIX = data_name
+    
     if _derig_selection():
-        create_export_set(auto_add_selected=True)
-        
-    
-    
-#import pymel.core as pm
-#cluster = pm.PyNode('skinCluster8')
-#print(cluster)
-#mapping = {}
-#for e in cluster.matrix:mapping.setdefault(e.index(),[]).append(e.inputs()[0])
-#cluster = pm.PyNode('skinCluster11')
-#for e in cluster.matrix:mapping.setdefault(e.index(),[]).append(e.inputs()[0])
+        name = f"{CLONE_PREFIX}:{CLONE_PREFIX}_CSC_EXPORT"
+        create_export_set(name, auto_add_selected=True)
 
-#for key,value in mapping.items():
-    #print(value)
 
-    
-    

@@ -1100,6 +1100,14 @@ def get_textures(objs, export_nodes = []):
 
                 color_input = pm.PyNode(color_input[0])
                 filepath = color_input.fileTextureName.get()
+                file = pathlib.Path(filepath)
+                if file.suffix.lower() != '.png':
+                    png = file.parent.joinpath(f"{file.stem}.png")
+                    if png.exists():
+
+                        filepath = str(png).replace("\\", "/")
+
+                        
                 if filepath:
                     materials.setdefault(shape.getParent().name(), set()).add(filepath)
                     
