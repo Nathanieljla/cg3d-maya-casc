@@ -1305,9 +1305,14 @@ class MyInstaller(ModuleManager):
                 child.unlink() #missing_ok=True) #missing_ok doens't work for maya 2022
                 
     def pre_install(self):
-        if os.path.exists(self.module_path):
-            shutil.rmtree(self.module_path, ignore_errors=True)
-        
+        try:
+            
+            if os.path.exists(self.module_path):
+                shutil.rmtree(self.module_path, ignore_errors=True)
+
+        except Exception as e:
+            print(f"Failed to clear module path:{e}")
+            
         super().pre_install()
 
         ##let's frist install platformdirs so we can make a spot for our
@@ -1329,9 +1334,7 @@ class MyInstaller(ModuleManager):
         #if not platforms_installed:
             #print("CASCADEUR:Failed to install platformsdir package. Installation can't continue.")
             #return False
-            
-        import os
-        
+
         local_path = pathlib.Path(os.path.expandvars("%LOCALAPPDATA%"))
             
         self.nekki_dir = local_path.joinpath("Nekki Limited", "Cascadeur")
@@ -1353,16 +1356,10 @@ class MyInstaller(ModuleManager):
         
         print("Pre install complete")
         return True
-    
 
     
-    def install(self):
-        results = super().install()
-        if not results:
-            self.clean_folder(self.module_path)
-            return False
-            
-        try:          
+    def _finish_install_setup(self):
+        try:
             #Let's copy our cascadeur packages to the right location
             scripts_dir = pathlib.Path(self.scripts_path)
             casc_site = scripts_dir.joinpath('cg3dcasc', 'casc-site')
@@ -1371,6 +1368,9 @@ class MyInstaller(ModuleManager):
             shutil.copytree(
                 scripts_dir.joinpath('wingcarrier'), casc_site.joinpath('wingcarrier')
             )
+            
+            pip_args = [r'--target={0}'.format(casc_site)]
+            Commandline.pip_install('cg3d-casc-core', pip_args=pip_args) #'https://github.com/Nathanieljla/cg3d-casc-core/archive/refs/heads/main.zip', pip_args=pip_args)
 
                 
             #zf casc_site.exists():
@@ -1417,6 +1417,15 @@ class MyInstaller(ModuleManager):
             return False
         
         return True
+
+    
+    def install(self):
+        results = super().install()
+        if not results:
+            self.clean_folder(self.module_path)
+            return False
+
+        return self._finish_install_setup()
     
     
     def casc_setup(self):
@@ -1546,11 +1555,8 @@ class MyInstaller(ModuleManager):
         return self.pre_install()
     
     def dev_install(self):
-        self._no_dep_install(r'https://github.com/Nathanieljla/cg3d-maya-casc/archive/refs/heads/main.zip')
-        #self._no_dep_install(r'https://github.com/Nathanieljla/cg3d-maya-core/archive/refs/heads/main.zip')
-        #self._no_dep_install(r'https://github.com/Nathanieljla/wing-carrier/archive/refs/heads/main.zip')
-        
-        return True
+        self._no_dep_install(r'https://github.com/Nathanieljla/cg3d-maya-casc/archive/refs/heads/main.zip')        
+        return self._finish_install_setup()
     
     def post_dev_install(self, install_succeeded):
         return self.post_install(install_succeeded)
@@ -1563,7 +1569,7 @@ class MyInstaller(ModuleManager):
 def main():
     if MAYA_RUNNING:
         MODULE_NAME = 'cascadeur'
-        MODULE_VERSION = 1.0
+        MODULE_VERSION = 1.5
         PACKAGE_NAME = "cg3d-maya-casc"
         
         manager = MyInstaller(MODULE_NAME, MODULE_VERSION, package_name = PACKAGE_NAME)
