@@ -1136,9 +1136,19 @@ class InstallerUi(QWidget):
         size = self.layout().minimumSize()
         width = size.width()
         height = size.height()
-        desktop = QApplication.desktop()
-        screenNumber = desktop.screenNumber(QCursor.pos())
-        screenRect = desktop.screenGeometry(screenNumber)
+
+        screen_at_cursor = QGuiApplication.screenAt(QCursor.pos())
+        if screen_at_cursor:
+            screenRect = screen_at_cursor.geometry() 
+        else:
+            primary_screen = QGuiApplication.primaryScreen()
+            if primary_screen:
+                screenRect = primary_screen.geometry()
+            else:
+                screenRect = QRect(0, 0, 1920, 1080) 
+                print("Warning: Could not get screen information. Using default size.") 
+
+
         widthCenter = (screenRect.width() / 2) - (width / 2)
         heightCenter = (screenRect.height() / 2) - (height / 2)        
         self.setGeometry(QRect(widthCenter, heightCenter, width, height))
