@@ -1279,6 +1279,45 @@ if __name__ == '__main__':
     run()
     
     
+#https://gist.github.com/Preston-Landers/267391562bc96959eb41
+    
+    #import ctypes
+    
+    ## Function prototypes (replace with actual function names and parameters if needed)
+    #IsUserAnAdmin = ctypes.windll.shell32.IsUserAnAdmin
+    #ShellExecuteW = ctypes.windll.shell32.ShellExecuteW
+    
+    ## Function to check if the user is an administrator (illustrative)
+    #def is_admin():
+        #if IsUserAnAdmin():
+            #return True
+        #else:
+            #return False
+    
+    ## Function to launch a program as administrator (UNSAFE APPROACH - DO NOT USE)
+    #def run_as_admin(command):
+        ## Placeholder for potentially insecure password storage (AVOID)
+        ## password = "your_administrator_password"  <-- DO NOT USE THIS
+    
+        #verb = "runas"  # Verb to use for ShellExecuteW (illustrative)
+        #params = None  # Additional parameters for ShellExecuteW (illustrative)
+        #show_cmd = 1  # Show the command window (illustrative)
+    
+        ## Unsafe example - avoid storing password in plain text
+        ## ShellExecuteW(None, verb, sys.executable, " ".join(sys.argv), params, show_cmd)
+    
+        #print("This approach is not recommended due to security concerns.")
+    
+    #if __name__ == "__main__":
+        #if is_admin():
+            #print("You are running the script with administrator privileges.")
+        #else:
+            #print("You do not have administrator privileges.")
+            ## Consider alternative solutions here (e.g., prompt user to run as admin)
+    
+    
+    
+    
     #import ctypes, sys
     
     #def is_admin():

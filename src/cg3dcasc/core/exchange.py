@@ -3,14 +3,29 @@ import json
 import tempfile
 import os
 #import typing
-import uuid
+
 #import winreg
 #import psutil
 import pathlib
 
+from maya import OpenMayaUI as omui 
+
+
+#try:
+    ##from PySide2.QtWidgets import *
+    ##from PySide2.QtGui import *
+    #from shiboken2 import wrapInstance
+#except:
+    ##from PySide6.QtWidgets import *
+    ##from PySide6.QtGui import *
+    #from shiboken6 import wrapInstance
+    
+
 import pymel.core as pm
 from . import hik
-from . import preferences
+from .udata import *
+#from .common import * 
+from cg3dcasc import preferences
 
 import wingcarrier.pigeons
 import cg3dguru.udata
@@ -343,77 +358,77 @@ _ACTIVE_CHARACTER_NODE = None
 _ACTIVE_USER_DATA = None
 
 
-class QRigData(cg3dguru.udata.BaseData):
-    """A block of data to help convert an HIK character to Cascaduer's quick rig"""
+#class QRigData(cg3dguru.udata.BaseData):
+    #"""A block of data to help convert an HIK character to Cascaduer's quick rig"""
 
 
-    @staticmethod
-    def get_attributes():
-        attrs = [
-            cg3dguru.udata.create_attr('characterNode', 'message'),
-            cg3dguru.udata.create_attr('chestJoint', 'message'),
-            cg3dguru.udata.create_attr('leftWeapon', 'message'),
-            cg3dguru.udata.create_attr('rightWeapon', 'message'),
-            cg3dguru.udata.create_attr('alignPelvis', 'bool'),
-            cg3dguru.udata.create_attr('createLayers', 'bool'),
+    #@staticmethod
+    #def get_attributes():
+        #attrs = [
+            #cg3dguru.udata.create_attr('characterNode', 'message'),
+            #cg3dguru.udata.create_attr('chestJoint', 'message'),
+            #cg3dguru.udata.create_attr('leftWeapon', 'message'),
+            #cg3dguru.udata.create_attr('rightWeapon', 'message'),
+            #cg3dguru.udata.create_attr('alignPelvis', 'bool'),
+            #cg3dguru.udata.create_attr('createLayers', 'bool'),
             
-            cg3dguru.udata.Attr('leftArmTwist', 'enum', enumName='X:Y:Z'),
-            cg3dguru.udata.Attr('leftForearmTwist', 'enum', enumName='X:Y:Z'),
+            #cg3dguru.udata.Attr('leftArmTwist', 'enum', enumName='X:Y:Z'),
+            #cg3dguru.udata.Attr('leftForearmTwist', 'enum', enumName='X:Y:Z'),
             
-            cg3dguru.udata.Attr('leftUpperLegTwist', 'enum', enumName='X:Y:Z'),
-            cg3dguru.udata.Attr('leftLegTwist', 'enum', enumName='X:Y:Z'),
+            #cg3dguru.udata.Attr('leftUpperLegTwist', 'enum', enumName='X:Y:Z'),
+            #cg3dguru.udata.Attr('leftLegTwist', 'enum', enumName='X:Y:Z'),
             
-            cg3dguru.udata.Attr('rightArmTwist', 'enum', enumName='X:Y:Z'),
-            cg3dguru.udata.Attr('rightForearmTwist', 'enum', enumName='X:Y:Z'),
+            #cg3dguru.udata.Attr('rightArmTwist', 'enum', enumName='X:Y:Z'),
+            #cg3dguru.udata.Attr('rightForearmTwist', 'enum', enumName='X:Y:Z'),
             
-            cg3dguru.udata.Attr('rightUpperLegTwist', 'enum', enumName='X:Y:Z'),
-            cg3dguru.udata.Attr('rightLegTwist', 'enum', enumName='X:Y:Z'), 
+            #cg3dguru.udata.Attr('rightUpperLegTwist', 'enum', enumName='X:Y:Z'),
+            #cg3dguru.udata.Attr('rightLegTwist', 'enum', enumName='X:Y:Z'), 
             
-            #cg3dguru.udata.Compound('twistAxes', 'compound', children =[
-                #cg3dguru.udata.Attr('leftArm', 'enum', enumName='X:Y:Z'),
-                #cg3dguru.udata.Attr('leftForearm', 'enum', enumName='X:Y:Z'),
-                #cg3dguru.udata.Attr('leftUpLeg', 'enum', enumName='X:Y:Z'),
-                #cg3dguru.udata.Attr('leftLeg', 'enum', enumName='X:Y:Z'),
-                #cg3dguru.udata.Attr('rightArm', 'enum', enumName='X:Y:Z'),
-                #cg3dguru.udata.Attr('rightForearm', 'enum', enumName='X:Y:Z'),
-                #cg3dguru.udata.Attr('rightUpLeg', 'enum', enumName='X:Y:Z'),
-                #cg3dguru.udata.Attr('rightLeg', 'enum', enumName='X:Y:Z'), 
-            #])
+            ##cg3dguru.udata.Compound('twistAxes', 'compound', children =[
+                ##cg3dguru.udata.Attr('leftArm', 'enum', enumName='X:Y:Z'),
+                ##cg3dguru.udata.Attr('leftForearm', 'enum', enumName='X:Y:Z'),
+                ##cg3dguru.udata.Attr('leftUpLeg', 'enum', enumName='X:Y:Z'),
+                ##cg3dguru.udata.Attr('leftLeg', 'enum', enumName='X:Y:Z'),
+                ##cg3dguru.udata.Attr('rightArm', 'enum', enumName='X:Y:Z'),
+                ##cg3dguru.udata.Attr('rightForearm', 'enum', enumName='X:Y:Z'),
+                ##cg3dguru.udata.Attr('rightUpLeg', 'enum', enumName='X:Y:Z'),
+                ##cg3dguru.udata.Attr('rightLeg', 'enum', enumName='X:Y:Z'), 
+            ##])
             
-        ]
+        #]
         
-        return attrs
+        #return attrs
     
-    @classmethod
-    def post_create(cls, data):
-        data.createLayers.set(1)
+    #@classmethod
+    #def post_create(cls, data):
+        #data.createLayers.set(1)
         
     
     
-class CascExportData(cg3dguru.udata.BaseData):
-    """A list for nodes that should always be sent to cascadeur
+#class CascExportData(cg3dguru.udata.BaseData):
+    #"""A list for nodes that should always be sent to cascadeur
     
-    The CascExportData.exportNodes attribute can store meshes, joints, and
-    skinClusters. Meshes, joints and skinClusters will be inspected to find
-    all dependent joints and meshes. E.g. add a skinCluster and all joints
-    will be exported (as well as the meshes they deform).
-    """
+    #The CascExportData.exportNodes attribute can store meshes, joints, and
+    #skinClusters. Meshes, joints and skinClusters will be inspected to find
+    #all dependent joints and meshes. E.g. add a skinCluster and all joints
+    #will be exported (as well as the meshes they deform).
+    #"""
     
-    @staticmethod
-    def get_attributes():
-        attrs = [
-            cg3dguru.udata.create_attr('cscDataId', 'string'),
-            cg3dguru.udata.create_attr('dynamicSet', 'bool')
-        ]
+    #@staticmethod
+    #def get_attributes():
+        #attrs = [
+            #cg3dguru.udata.create_attr('cscDataId', 'string'),
+            #cg3dguru.udata.create_attr('dynamicSet', 'bool')
+        #]
         
-        return attrs
+        #return attrs
     
-    @classmethod
-    def post_create(cls, data):
-        unique_id = uuid.uuid1()
-        data.cscDataId.set(str(unique_id))
-        data.cscDataId.lock()
-        data.dynamicSet.set(1)
+    #@classmethod
+    #def post_create(cls, data):
+        #unique_id = uuid.uuid1()
+        #data.cscDataId.set(str(unique_id))
+        #data.cscDataId.lock()
+        #data.dynamicSet.set(1)
 
 
 
@@ -667,6 +682,7 @@ def has_twist(character_node, twist_names = None):
 
 def get_skinned_meshes(character_node):
     """return a list of meshes that are deformed by the hik character joints"""
+    
     global _ACTIVE_CHARACTER_NODE
     _ACTIVE_CHARACTER_NODE = character_node
     
@@ -719,32 +735,27 @@ def get_skin_cluster_joints(skin_clusters):
     return joint_set
 
 
-def get_mesh_skin_clusters(meshes):
-    """Given a list of meshes, return a set of associated skinClusters"""
-    clusters = set()
-    for m in meshes:
-        inputs = m.inMesh.inputs()
-        if inputs and isinstance(inputs[0], pm.nodetypes.SkinCluster):
-            clusters.add(inputs[0])
-            
-    return clusters
+
 
 
 def get_skin_cluster_meshes(skin_clusters):
     """Given a list of skinClusters, return a set of associated meshes"""
     meshes = set()
     for cluster in skin_clusters:
-        output_geo = cluster.attr('outputGeometry')
+        meshes.update(
+            pm.animation.skinCluster(cluster, geometry=True, query=True)
+        )
+        #output_geo = cluster.attr('outputGeometry')
         
-        results = output_geo.outputs()
-        for result in results:
-            is_group_part = isinstance(result, pm.nodetypes.GroupParts)
-            while is_group_part:
-                result = result.outputGeometry.outputs()[0]
-                is_group_part = isinstance(result, pm.nodetypes.GroupParts)
+        #results = output_geo.outputs()
+        #for result in results:
+            #is_group_part = isinstance(result, pm.nodetypes.GroupParts)
+            #while is_group_part:
+                #result = result.outputGeometry.outputs()[0]
+                #is_group_part = isinstance(result, pm.nodetypes.GroupParts)
                 
-            if result not in meshes:
-                meshes.add(result)            
+            #if result not in meshes:
+                #meshes.add(result)            
         
         
         #for geo in output_geo.outputs():
@@ -752,6 +763,77 @@ def get_skin_cluster_meshes(skin_clusters):
                 #meshes.add(geo)
                 
     return meshes
+
+
+def get_mesh_cluster_mappings() -> dict:
+    """Return a global mapping of mesh:clusters and cluster:meshes"""
+    mapping = {}
+    for cluster in pm.ls(type='skinCluster'):
+        meshes = pm.animation.skinCluster(cluster,geometry=True,query=True)
+        mapping[cluster] = set(meshes)
+        
+        for mesh in meshes:
+            mapping.setdefault(mesh, set()).add(cluster)
+            
+    return mapping
+
+
+def get_mesh_skin_clusters(meshes):
+    """Given a list of meshes, return a set of all associated skinClusters"""
+    mesh_clusters = get_mesh_cluster_mappings()
+    clusters = set()
+    for mesh in meshes:
+        if mesh in mesh_clusters:
+            clusters.update(mesh_clusters[mesh])
+            
+    return clusters
+    
+
+def get_skinned_data_sets(input_list):
+    """Sort the input list into joints, meshes, skin_clusters, and transforms"""
+    joints = set()
+    meshes = set()
+    skin_clusters = set()
+    transforms = set()
+
+    #organize our exportExtra nodes into types
+    for node in input_list:
+        if isinstance(node, pm.nodetypes.Joint):
+            joints.add(node)
+        elif isinstance(node, pm.nodetypes.Mesh):
+            meshes.add(node)
+        elif isinstance(node, pm.nodetypes.SkinCluster):
+            skin_clusters.add(node)
+        elif isinstance(node, pm.nodetypes.Transform):
+            if isinstance(node.getShape(), pm.nodetypes.Mesh):
+                meshes.add(node.getShape())
+            else:
+                transforms.add(node)
+        else:
+            pm.warning('Cascaduer Export: Ignoring object {}'.format(node.name()))
+            
+    return (joints, meshes, skin_clusters, transforms)
+
+
+def update_skinned_data_sets(joints, meshes, skin_clusters, transforms):
+    """Update each input set with any dependencies from the other sets"""
+    
+    skin_clusters.update(
+        get_mesh_skin_clusters(meshes)
+    )
+    
+    skin_clusters.update(
+        get_joint_skin_clusters(joints)
+    )
+    
+    joints.update(
+        get_skin_cluster_joints(skin_clusters)
+    )
+    
+    meshes.update(
+        get_skin_cluster_meshes(skin_clusters)
+    )
+
     
     
 def get_hik_joints(character_node):
@@ -788,6 +870,7 @@ def get_spine_joints(character_node):
     return spine_joints
 
 
+
 def export_qrig_file(character_node, qrig_data, filename):
     """Exports the character definition to a qrig file"""
     global _ACTIVE_CHARACTER_NODE
@@ -805,6 +888,7 @@ def export_qrig_file(character_node, qrig_data, filename):
     return filename
 
 
+
 def node_type_exportable(node):
     """See if the node set to export is a valid node type"""
     #This is used by the editor, so don't remove this function
@@ -816,6 +900,7 @@ def node_type_exportable(node):
         return True
     
     return False
+
 
 
 def get_character_node(export_data):
@@ -848,61 +933,35 @@ def get_exportable_content(export_data):
     
     if not export_data.dynamicSet.get():
         return set(export_data.node().flattened())
-                
-    character_node = get_character_node(export_data)
-    joints = set()
-    meshes = set()
-    skin_clusters = set()
-    transforms = set()
-
-    #organize our exportExtra nodes into types
-    for node in export_data.node().flattened():
-        if isinstance(node, pm.nodetypes.Joint):
-            joints.add(node)
-        elif isinstance(node, pm.nodetypes.Mesh):
-            meshes.add(node)
-        elif isinstance(node, pm.nodetypes.SkinCluster):
-            skin_clusters.add(node)
-        elif isinstance(node, pm.nodetypes.Transform):
-            transforms.add(node)
-        else:
-            pm.warning('Cascaduer Export: Ignoring object {}'.format(node.name()))
+           
+    joints, meshes, skin_clusters, transforms =\
+        get_skinned_data_sets(export_data.node().flattened())
 
     #We need to combine all joints and skinned meshes into a set of
     #skin_clusters, which can then be used to build a complete list
     #of joints and meshes that need exporting.
+    character_node = get_character_node(export_data)
     if character_node:
         hik_joints = get_hik_joints(character_node)
         joints.update(hik_joints)
+        
+    update_skinned_data_sets(joints, meshes, skin_clusters, transforms)
 
-    mesh_clusters = get_mesh_skin_clusters(meshes)
-    skin_clusters.update(mesh_clusters)
-
-    joint_skin_clusters = get_joint_skin_clusters(joints)
-    skin_clusters.update(joint_skin_clusters)
-
-    skinned_joints = get_skin_cluster_joints(skin_clusters)
-    joints.update(skinned_joints)
-
-    skinned_meshes = get_skin_cluster_meshes(skin_clusters)
-    meshes.update(skinned_meshes)
-
-    root_transforms = set()
-    add_transform_roots(joints, root_transforms)
-    add_transform_roots(meshes, root_transforms)
-    add_transform_roots(transforms, root_transforms)
-    
-    return root_transforms
+    return (joints, meshes, skin_clusters, transforms)
     
     
 
 def _export_data(export_data, export_folder: pathlib.Path, export_rig: bool, export_fbx: bool):    
-    #When export_fbx and export_rig are both false
-    #then this function is still useful as it will
-    #still returns a list of exportable_content
+    #When export_fbx and export_rig are both false then this function is
+    #still useful as it will still returns a list of exportable_content
     qrig_data = QRigData.get_data(export_data.node())
     character_node = get_character_node(export_data)
-    root_transforms =  get_exportable_content(export_data)
+    joints, meshes, skin_clusters, transforms =  get_exportable_content(export_data)
+    
+    root_transforms = set()
+    add_transform_roots(joints, root_transforms)
+    add_transform_roots(meshes, root_transforms)
+    add_transform_roots(transforms, root_transforms)    
     
     if export_fbx:
         #Hik should be exported from the stand position only when
@@ -971,8 +1030,40 @@ def _build_default_set():
 
 
 
-def get_textures(objs):
+#def convert_texture(texture_path: pathlib.Path) -> bool:
+    #success = False
+    #try:         
+        #pp = omui.MQtUtil.createPixmap(texture_path)
+        #pmap = wrapInstance( int(pp), QPixmap)
+        #image = pmap.toImage()
+        #save_name = texture_path.with_suffix('.png')
+        #image.save(str(save_name))
+        #success = True
+    #except Exception as e:
+        #print(e)
+        
+    #return success
+
+
+
+def get_textures(objs, export_nodes = []):
     materials = {}
+    
+    
+    def _get_best_file_node(color_input):
+        nonlocal export_nodes
+        matches = []
+        for texture in color_input:
+            for export_node in export_nodes:
+                if texture in export_nodes[0].members(True):
+                    matches.append(texture)
+        
+        if matches:
+            return matches
+
+        #No matches were found so just return the original input
+        return color_input
+    
     
     shapes = pm.listRelatives(objs, s=True)
     shapes += pm.ls(objs, shapes=True)
@@ -995,14 +1086,45 @@ def get_textures(objs):
                 color_input = pm.listConnections(color_attr, s=True, d=False)
                 if not color_input:
                     continue
+            
+                color_input = pm.findType(color_input, type='file', forward=False,deep =True)
+                if not color_input:
+                    continue
                 
-                color_input = color_input[0]
-                if pm.nodeType(color_input) == 'file':
-                    filepath = color_input.fileTextureName.get()
-                    if filepath:
-                        materials[shape.getParent().name()] = filepath
+                if len(color_input) > 1:
+                    color_input = _get_best_file_node(color_input)
+                    
+                if len(color_input) != 1:
+                    pm.warning(f"Found multiple textures for '{color_attr}' skipping texture. Note: You can add the preferred file node to your export set to fix this.")
+                    continue
+
+                color_input = pm.PyNode(color_input[0])
+                filepath = color_input.fileTextureName.get()
+                file = pathlib.Path(filepath)
+                if file.suffix.lower() != '.png':
+                    png = file.parent.joinpath(f"{file.stem}.png")
+                    if png.exists():
+
+                        filepath = str(png).replace("\\", "/")
+
                         
+                if filepath:
+                    materials.setdefault(shape.getParent().name(), set()).add(filepath)
+                    
+
+    for key, value in materials.items():
+        materials[key] = list(value)
+
     return materials
+
+
+
+def get_export_nodes():
+    scene_sets = pm.ls(sl=True, type='objectSet')
+    if not scene_sets:
+        scene_sets = pm.ls(type='objectSet')
+    
+    return cg3dguru.udata.Utils.get_nodes_with_data(scene_sets, data_class=CascExportData)    
 
 
 
@@ -1023,12 +1145,13 @@ def export(export_set=None, export_rig=False, cmd_string='', textures=True, only
 
     if export_set:
         export_nodes = [export_set]
-    else:   
-        scene_sets = pm.ls(sl=True, type='objectSet')
-        if not scene_sets:
-            scene_sets = pm.ls(type='objectSet')
+    else:
+        export_nodes = get_export_nodes()
+        #scene_sets = pm.ls(sl=True, type='objectSet')
+        #if not scene_sets:
+            #scene_sets = pm.ls(type='objectSet')
         
-        export_nodes = cg3dguru.udata.Utils.get_nodes_with_data(scene_sets, data_class=CascExportData)
+        #export_nodes = cg3dguru.udata.Utils.get_nodes_with_data(scene_sets, data_class=CascExportData)
         if not export_nodes:
             #There's nothing to export in the scene, so let's build a default set.
             export_nodes = [_build_default_set()]
@@ -1045,7 +1168,7 @@ def export(export_set=None, export_rig=False, cmd_string='', textures=True, only
         print("Exporting textures")
         for root in export_roots:
             branch = pm.listRelatives(root, allDescendents=True)
-            results = get_textures(branch)
+            results = get_textures(branch, export_nodes)
             texture_mappings.update(results)
             
         print(texture_mappings)
