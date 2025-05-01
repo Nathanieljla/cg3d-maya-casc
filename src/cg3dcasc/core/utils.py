@@ -120,31 +120,36 @@ def _get_index_mapping(source_cluster, cloned_cluster, clone_pairing):
     return index_mapping
     
       
+def _get_transform_attrs(obj):
+    #You can lock/unlock individual attributes, but the compound attribute
+    #might also be locked so you need to make sure it matches the same state.
+    #This took way to long to figure out
+    attrs = ['translate', 'tx', 'ty', 'tz', 'rotate', 'rx', 'ry', 'rz', 'scale', ' sx', 'sy', 'sz']
+    return [obj.attr(name) for name in attrs]
+
       
 def _lock_transform(obj, state):
-    pm.setAttr(obj.translateX, lock=state)
-    pm.setAttr(obj.translateY, lock=state)
-    pm.setAttr(obj.translateZ, lock=state)
-    pm.setAttr(obj.rotateX, lock=state)
-    pm.setAttr(obj.rotateY, lock=state)
-    pm.setAttr(obj.rotateZ, lock=state)
-    pm.setAttr(obj.scaleX, lock=state)
-    pm.setAttr(obj.scaleY, lock=state)
-    pm.setAttr(obj.scaleZ, lock=state)
-    
-    
+    attrs = _get_transform_attrs(obj)
+
+    for attr in attrs:
+        pm.setAttr(attr, lock=state)
+ 
     
 def _Unhide_primary_attrs(obj):
-    pm.setAttr(obj.translateX, keyable=True)
-    pm.setAttr(obj.translateY, keyable=True)
-    pm.setAttr(obj.translateZ, keyable=True)
-    pm.setAttr(obj.rotateX, keyable=True)
-    pm.setAttr(obj.rotateY, keyable=True)
-    pm.setAttr(obj.rotateZ, keyable=True)
-    pm.setAttr(obj.scaleX, keyable=True)
-    pm.setAttr(obj.scaleY, keyable=True)
-    pm.setAttr(obj.scaleZ, keyable=True)
-    pm.setAttr(obj.visibility, keyable=True)
+    attrs = _get_transform_attrs(obj)
+
+    for attr in attrs:
+        pm.setAttr(attr, keyable=True)    
+    #pm.setAttr(obj.translateX, keyable=True)
+    #pm.setAttr(obj.translateY, keyable=True)
+    #pm.setAttr(obj.translateZ, keyable=True)
+    #pm.setAttr(obj.rotateX, keyable=True)
+    #pm.setAttr(obj.rotateY, keyable=True)
+    #pm.setAttr(obj.rotateZ, keyable=True)
+    #pm.setAttr(obj.scaleX, keyable=True)
+    #pm.setAttr(obj.scaleY, keyable=True)
+    #pm.setAttr(obj.scaleZ, keyable=True)
+    #pm.setAttr(obj.visibility, keyable=True)
     
     _lock_transform(obj, False)
     pm.setAttr(obj.visibility, lock=False)
@@ -154,9 +159,9 @@ def _Unhide_primary_attrs(obj):
 def _make_clean_copy(mesh, mesh_cluster_mapping, temp_parent=None):
     base_name = get_base_name(mesh.getParent())
     name = f"{CLONE_PREFIX}:{base_name}_TEMP"
-    
+
     skin_proxy = pm.duplicate(mesh, name=name)[0]
-    
+
     #Freeze any scale that might be on the mesh
     _lock_transform(skin_proxy, False)
     pm.makeIdentity(skin_proxy, apply=True, t=True, r=True, s=True, n=False, pn=True)
