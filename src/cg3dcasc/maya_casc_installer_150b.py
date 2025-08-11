@@ -369,6 +369,9 @@ class ModuleManager(QThread):
         #Non-Maya python and pip paths are needed for installing on linux (and OsX?)
         self.python_path, self.pip_path = Commandline.get_python_paths()
         self.command_string, self.uses_global_pip = Commandline.get_command_string()
+        
+        self._installed_modules = maya.cmds.moduleInfo(listModules=True) if MAYA_RUNNING else []
+        self._installed_modules = [m.lower() for m in self._installed_modules]
      
     
     def __del__(self):
@@ -732,10 +735,14 @@ class ModuleManager(QThread):
             return False
         
         return True
+
     
-    
+    def module_installed(self):
+        return self.module_name.lower() in self._installed_modules
+
+
     def uninstallable(self):
-        return self.package_installed(self.package_name)
+        return self.package_installed(self.package_name) or self.module_installed()
     
     
     def uninstall(self):
@@ -747,7 +754,7 @@ class ModuleManager(QThread):
     
     
     def should_upgrade(self):
-        """Should the manager run the uppgrade operation instead of installing"""
+        """Should the manager run the upgrade operation instead of installing"""
         return self.package_installed(self.package_name) and self.package_outdated(self.package_name)        
     
     
@@ -858,7 +865,7 @@ class ModuleManager(QThread):
             bool:was the installation successful?
         """        
         installed = False
-        if not self.package_installed(self.package_name):
+        if not self.uninstallable():
 
             try:
                 self.install_remote_package()
@@ -1087,12 +1094,15 @@ class InstallerUi(QWidget):
         self.success_message = success_message
         self.post_error_messsage =  post_error_messsage
         self.show_dev_menu = show_dev_menu
-        
+
+        self.pymel_button = None
         self.create_layout(background_color, company_logo_size)
         self.set_default_size(name)
         self.install_button.clicked.connect(self.on_action)
         self.close_button.clicked.connect(self.on_close)
-        
+        if self.pymel_button is not None:
+            self.pymel_button.clicked.connect(self.install_pymel)
+
         
         
     def contextMenuEvent(self, event):
@@ -1208,6 +1218,18 @@ class InstallerUi(QWidget):
         self.movie.setDevice(self.device)
         self.animated_gif = QLabel()
 
+        #pymel_installed = False
+        #try:
+            #import pymel
+            #pymel_installed = True
+            #print(pymel.__file__)
+        #except:
+            #pass
+
+        #if not pymel_installed:
+            #self.pymel_button = IconButton('Install PyMel', highlight=True)
+            #self.pymel_button.setMinimumHeight(42)
+            
         self.animated_gif.setMovie(self.movie)
         self.animated_gif.setMaximumHeight(24)
         self.animated_gif.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
@@ -1222,7 +1244,10 @@ class InstallerUi(QWidget):
         message_layout.addWidget(self.message_label, 1)
         message_layout.setAlignment(Qt.AlignCenter)
         outer.addLayout(message_layout)
-        
+
+        if self.pymel_button:
+            outer.addWidget(self.pymel_button, 0)
+      
         button_layout = QHBoxLayout()
         button_layout.addStretch()
         button_layout.addWidget(self.install_button, 0)
@@ -1275,7 +1300,12 @@ class InstallerUi(QWidget):
         if not no_errors:
             self.message_label.setText(self._message(self.post_error_messsage))
     
-        
+    
+    def install_pymel(self):
+        self.module_manager.install_pymel()
+        self.pymel_button.hide()
+
+
     def on_close(self):
         self.close()
         

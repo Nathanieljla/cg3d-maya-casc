@@ -253,7 +253,7 @@ def _clone_meshes(meshes, mesh_parent, skinned_parent, clone_pairing):
             
             
 
-def create_export_set(name='', auto_add_selected=False) -> pm.nodetypes.ObjectSet | None:
+def create_export_set(name='', auto_add_selected=False) -> pm.nodetypes.ObjectSet :
     if not name:
         data_name, ok = QInputDialog.getText(None, "New Node Name", 'Name this data')
         if not ok:
