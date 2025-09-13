@@ -1,6 +1,6 @@
 Please consider getting the installer from my [Gumroad account](https://3dcgguru.gumroad.com/l/jowgd) as this allows me to more easily announce updates and track the userbase.
 
-
+![maya2024](https://img.shields.io/badge/Maya_2025-tested-brightgreen.svg)
 ![maya2024](https://img.shields.io/badge/Maya_2024-tested-brightgreen.svg)
 ![maya2023](https://img.shields.io/badge/Maya_2023-tested-brightgreen.svg)
 ![maya2022](https://img.shields.io/badge/Maya_2022-tested-brightgreen.svg)
@@ -36,6 +36,9 @@ This will automatically install all the dependencies without requiring admin pri
  (you can say 'yes' to the question)
 
  # Revisions
+ ### 1.1.3
+ Updated to support Maya 2025
+ 
  ### 1.1.2
  Updated to support Cascadeur 2024.1
  Updated package dependencies to be version specific

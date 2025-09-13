@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cg3d-maya-casc"
-version = "1.1.3rc1"
+version = "1.5.0"
 authors = [
   { name="Nathaniel A", email="developer@3dcg.guru" },
 ]
@@ -18,9 +18,9 @@ classifiers = [
 ]
 
 dependencies = [
-    "pymel==1.5.0",
+    "pymel>=1.5.0",
     "cg3d-maya-core==0.7.0",
-    "wing-carrier==1.1.1"
+    "wing-carrier==1.1.3"
 ]
 
 [project.urls]
