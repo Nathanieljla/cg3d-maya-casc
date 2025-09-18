@@ -181,14 +181,14 @@ def _make_clean_copy(mesh, mesh_cluster_mapping, temp_parent=None):
         for cluster in mesh_cluster_mapping[mesh]:
             mi = pm.animation.skinCluster(cluster, maximumInfluences=True, query=True)
             influences = pm.animation.skinCluster(cluster, influence=True, query=True)
-            
-            cloned_cluster = pm.animation.skinCluster(*influences, skin_proxy, mi=mi)
+
+            cloned_cluster = pm.animation.skinCluster(*influences, skin_proxy, mi=mi, tsb=True)
             pm.copySkinWeights(ss=cluster, ds=cloned_cluster, noMirror=True,
                                surfaceAssociation='closestPoint', influenceAssociation='closestJoint')
             
             pm.select(skin_proxy, replace=True)
-            pm.mel.removeUnusedInfluences()
-    
+            pm.animation.skinCluster(skin_proxy, edit=True, rui=True)
+
     return (clone, skin_proxy)
     
             
@@ -221,7 +221,7 @@ def _clone_meshes(meshes, mesh_parent, skinned_parent, clone_pairing):
             influences = pm.animation.skinCluster(cluster, influence=True, query=True)         
  
             cloned_influences = [clone_pairing[i] for i in influences]
-            cloned_cluster = pm.animation.skinCluster(*cloned_influences, clone, mi=mi)
+            cloned_cluster = pm.animation.skinCluster(*cloned_influences, clone, mi=mi, tsb=True)
             
             _map_clone(cluster, cloned_cluster, clone_pairing)
             pm.animation.skinCluster(cloned_cluster, normalizeWeights =0, edit=True)
@@ -327,7 +327,7 @@ def _derig_selection():
     for key in joint_hierarchy.keys():
         joint_hierarchy[key] = list(joint_hierarchy[key])
     
-    
+
     clone_pairing = {}
     root = pm.general.createNode('transform', name = f"{CLONE_PREFIX}:root")
     data = ProxyRoot.add_data(root)
