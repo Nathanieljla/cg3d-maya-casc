@@ -1,14 +1,16 @@
 Please consider getting the installer from my [Gumroad account](https://3dcgguru.gumroad.com/l/jowgd) as this allows me to more easily announce updates and track the userbase.
 
-
+![maya2024](https://img.shields.io/badge/Maya_2026*-tested-yellow.svg)
+![maya2024](https://img.shields.io/badge/Maya_2025-tested-brightgreen.svg)
 ![maya2024](https://img.shields.io/badge/Maya_2024-tested-brightgreen.svg)
 ![maya2023](https://img.shields.io/badge/Maya_2023-tested-brightgreen.svg)
 ![maya2022](https://img.shields.io/badge/Maya_2022-tested-brightgreen.svg)
 
-![casc](https://img.shields.io/badge/Cascadeur_2023.2+-required-red.svg)
+![casc](https://img.shields.io/badge/Cascadeur_2025.2+-required-red.svg)
 
 ![Windows](https://img.shields.io/badge/Windows-tested-blue)
 
+*As of Sept. 2025 Pymel hasn't been updated to work with Maya 2026.  Users will get a documentation error, which can be manually fixed.  The directions for copying and renaming the documents can be [found here](https://www.autodesk.com/support/technical/article/caas/sfdcarticles/sfdcarticles/PyMEL-fails-while-importing-modules-with-error-Cannot-find-maya-documentation-in-Maya.html)
 
 # cg3d-maya-casc
 Easily bridge data between Maya and Cascadeur with this Maya Module.
@@ -26,7 +28,7 @@ If the tool gives you issues you can open the cascadeur.mod file in a text edito
 
 ## Drag & Drop
 The easiest way to install this application is to ...
-1. Click this File Link > [maya_casc_installer.py](https://github.com/Nathanieljla/cg3d-maya-casc/releases/download/v1.1.0/maya_casc_installer.py) < to download the installation python file.
+1. Click this File Link > [maya_casc_installer.py](https://github.com/Nathanieljla/cg3d-maya-casc/releases/download/v.1.5.0-rc1/maya_casc_installer.py) < to download the installation python file.
 2. Drag-n-drop it from the browser into a maya-viewport. 
 This will automatically install all the dependencies without requiring admin privileges into your user-directory.
 3. Hit 'Install'.  If any pop-ups appear, say "yes" or "allow".  The installer will likely take 20+ seconds.
@@ -36,6 +38,16 @@ This will automatically install all the dependencies without requiring admin pri
  (you can say 'yes' to the question)
 
  # Revisions
+ ### 1.5.0
+ New tools for cloning a rigged character to act as a proxy with Cascadeur
+ 
+ Support for multiple textures per mesh
+ 
+ Plug-in now uses Cascadeur's pycsc wrapper
+ 
+ ### 1.1.3
+ Updated to support Maya 2025
+ 
  ### 1.1.2
  Updated to support Cascadeur 2024.1
  Updated package dependencies to be version specific
