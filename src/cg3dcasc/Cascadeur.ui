@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>668</width>
-    <height>728</height>
+    <width>434</width>
+    <height>617</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -771,26 +771,9 @@
     </item>
    </layout>
   </widget>
-  <widget class="QMenuBar" name="menuBar">
-   <property name="geometry">
-    <rect>
-     <x>0</x>
-     <y>0</y>
-     <width>668</width>
-     <height>22</height>
-    </rect>
-   </property>
-   <widget class="QMenu" name="menuAdvanced">
-    <property name="title">
-     <string>Advanced</string>
-    </property>
-    <addaction name="actionDerig"/>
-   </widget>
-   <addaction name="menuAdvanced"/>
-  </widget>
-  <action name="actionDerig">
+  <action name="Acttion_Add_HIK">
    <property name="text">
-    <string>Make rigless clone</string>
+    <string>Add HIK to Current Set</string>
    </property>
   </action>
  </widget>

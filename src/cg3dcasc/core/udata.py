@@ -52,36 +52,26 @@ class QRigData(cg3dguru.udata.BaseData):
             cg3dguru.udata.create_attr('rightWeapon', 'message'),
             cg3dguru.udata.create_attr('alignPelvis', 'bool'),
             cg3dguru.udata.create_attr('createLayers', 'bool'),
-            
+
             cg3dguru.udata.Attr('leftArmTwist', 'enum', enumName='X:Y:Z'),
             cg3dguru.udata.Attr('leftForearmTwist', 'enum', enumName='X:Y:Z'),
-            
+
             cg3dguru.udata.Attr('leftUpperLegTwist', 'enum', enumName='X:Y:Z'),
             cg3dguru.udata.Attr('leftLegTwist', 'enum', enumName='X:Y:Z'),
-            
+
             cg3dguru.udata.Attr('rightArmTwist', 'enum', enumName='X:Y:Z'),
             cg3dguru.udata.Attr('rightForearmTwist', 'enum', enumName='X:Y:Z'),
-            
+
             cg3dguru.udata.Attr('rightUpperLegTwist', 'enum', enumName='X:Y:Z'),
-            cg3dguru.udata.Attr('rightLegTwist', 'enum', enumName='X:Y:Z'), 
-            
-            #cg3dguru.udata.Compound('twistAxes', 'compound', children =[
-                #cg3dguru.udata.Attr('leftArm', 'enum', enumName='X:Y:Z'),
-                #cg3dguru.udata.Attr('leftForearm', 'enum', enumName='X:Y:Z'),
-                #cg3dguru.udata.Attr('leftUpLeg', 'enum', enumName='X:Y:Z'),
-                #cg3dguru.udata.Attr('leftLeg', 'enum', enumName='X:Y:Z'),
-                #cg3dguru.udata.Attr('rightArm', 'enum', enumName='X:Y:Z'),
-                #cg3dguru.udata.Attr('rightForearm', 'enum', enumName='X:Y:Z'),
-                #cg3dguru.udata.Attr('rightUpLeg', 'enum', enumName='X:Y:Z'),
-                #cg3dguru.udata.Attr('rightLeg', 'enum', enumName='X:Y:Z'), 
-            #])
-            
+            cg3dguru.udata.Attr('rightLegTwist', 'enum', enumName='X:Y:Z'),
+
         ]
         
         return attrs
     
     @classmethod
     def post_create(cls, data):
+        data.alignPelvis.set(1)
         data.createLayers.set(1)
         
     
