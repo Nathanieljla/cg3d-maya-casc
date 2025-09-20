@@ -224,17 +224,27 @@ class HikExportEditor(cg3dguru.ui.Window):
             
         names.sort()
         char_name, ok = QInputDialog.getItem(None, "Select Character", "", names, 0, False)
-        if ok:
-            char_node = nodes[char_name]
-            node = cg3dcasc.CascExportData.create_node(nodeType = 'objectSet')[0]
+        if not ok:
+            return
+
+        char_node = nodes[char_name]
+        new_set = 'New set'
+        cancel = 'Cancel'
+        result = new_set if not self.active_selection else pm.confirmDialog(message="Add HIK To", button=[new_set, f'{self.active_selection.name()}', cancel])
+        if result == cancel:
+            return
+
+        if result == new_set:
+            node = cg3dcasc.CascExportData.create_node(nodeType='objectSet')[0]
             name = '{}_CSC_EXPORT'.format(char_node.name())
             pm.rename(node, name)
-            
-            data = self.qrig_data_instance.add_data(node)
-            char_node.message >> data.characterNode
-            
-            self.node_to_select = node
-            self.init_ui()
+        else:
+            node = self.active_selection
+
+        data = self.qrig_data_instance.add_data(node)
+        char_node.message >> data.characterNode
+        self.node_to_select = node
+        self.init_ui()
         
         
     def on_export(self, new_scene):
