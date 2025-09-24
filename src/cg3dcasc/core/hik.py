@@ -93,9 +93,7 @@ def get_character_source(character):
     current_character = pm.optionMenuGrp(character_list, query=True, value=True)
     if current_character != character_name:
         _set_list(character_list, character_name, 'hikUpdateCurrentCharacterFromUI()')
-        #pm.optionMenuGrp(character_list, edit=True, value=character_name)
-        #pm.mel.eval('hikUpdateCurrentCharacterFromUI()')
-        #pm.mel.eval('hikUpdateContextualUI()')
+
         
     return pm.optionMenuGrp(source_list, query=True, value=True)
 
@@ -108,10 +106,7 @@ def set_character(character):
     current_character = pm.optionMenuGrp(character_list, query=True, value=True)
     if current_character != character_name:
         _set_list(character_list, character_name, 'hikUpdateCurrentCharacterFromUI()')
-        #pm.optionMenuGrp(character_list, edit=True, value=character_name)
-        #pm.mel.eval('hikUpdateCurrentCharacterFromUI()')
-        #pm.mel.eval('hikUpdateContextualUI()')    
-    
+
 
 def set_character_source(character, source: SourceType):
     """Set the HIK UI to a specific character and source"""
@@ -121,10 +116,7 @@ def set_character_source(character, source: SourceType):
     current_character = pm.optionMenuGrp(character_list, query=True, value=True)
     if current_character != character_name:
         _set_list(character_list, character_name, 'hikUpdateCurrentCharacterFromUI()')
-        #pm.optionMenuGrp(character_list, edit=True, value=character_name)
-        #pm.mel.eval('hikUpdateCurrentCharacterFromUI()')
-        #pm.mel.eval('hikUpdateContextualUI()')
-           
+
     #I can't believe there's a prefix of ' ', but here we are  
     source_name = ''
     if source == SourceType.NONE:
@@ -144,11 +136,8 @@ def set_character_source(character, source: SourceType):
         current_source = pm.optionMenuGrp(source_list, query=True, value=True)
         if current_source != source_name:
             _set_list(source_list, source_name, 'hikUpdateCurrentSourceFromUI()')
-            #pm.optionMenuGrp(source_list, edit=True, value=source_name)
-            #pm.mel.eval('hikUpdateCurrentSourceFromUI()')
-            #pm.mel.eval('hikUpdateContextualUI()')
-        
-    
+
+
     
 #The command that runs when the character changes.
 #hikUpdateCurrentCharacterFromUI(); hikUpdateContextualUI();
