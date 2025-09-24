@@ -9,6 +9,8 @@ class SourceType(Enum):
     
     
 def _get_hik_windows():
+    pm.mel.eval('if (!`pluginInfo -q -l "mayaHIK"`){ loadPlugin "mayaHIK"; } if (!`pluginInfo -q -l "mayaCharacterization"`) { loadPlugin "mayaCharacterization"; } if (!`pluginInfo -q -l "OneClick"`){ loadPlugin "OneClick"; } hikToggleWidget();')
+
     hik_options = pm.lsUI(l=True, type="optionMenuGrp")
     character_list = None
     source_list = None
