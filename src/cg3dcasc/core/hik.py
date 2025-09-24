@@ -34,6 +34,35 @@ def _get_character_name(character):
     else:
         pm.error("Can't get character name from: {}".format(character))
         
+
+def _set_list(list_control, value, update_method_name):
+    menu_items = pm.optionMenuGrp(list_control, q=True, itemListLong=True)
+    menu_items_names = {pm.menuItem(menu_item, q=True, label=True).lower().strip(): menu_item
+                        for menu_item in menu_items}
+    value = value.lower().strip()
+    
+    menu_item = None
+    if value in menu_items_names:
+        menu_item = menu_items_names[value]
+        
+    else:
+        matches = 0
+        for name, current_item in menu_items_names.items():
+            if name.find(value) != -1:
+                matches += 1
+                menu_item = current_item
+                
+        if matches == 0:
+            raise KeyError(f"HIK: Couldn't find {value}")
+        elif matches > 1:
+            raise KeyError(f"HIK: Too many options match {value}")
+
+    value = pm.menuItem(menu_item, q=True, label=True)
+
+    pm.optionMenuGrp(list_control, edit=True, value=value)
+    pm.mel.eval(update_method_name)
+    pm.mel.eval('hikUpdateContextualUI()')
+        
         
 def get_current_character():
     """Returns the name of the active hik character"""
@@ -63,9 +92,10 @@ def get_character_source(character):
 
     current_character = pm.optionMenuGrp(character_list, query=True, value=True)
     if current_character != character_name:
-        pm.optionMenuGrp(character_list, edit=True, value=character_name)
-        pm.mel.eval('hikUpdateCurrentCharacterFromUI()')
-        pm.mel.eval('hikUpdateContextualUI()')
+        _set_list(character_list, character_name, 'hikUpdateCurrentCharacterFromUI()')
+        #pm.optionMenuGrp(character_list, edit=True, value=character_name)
+        #pm.mel.eval('hikUpdateCurrentCharacterFromUI()')
+        #pm.mel.eval('hikUpdateContextualUI()')
         
     return pm.optionMenuGrp(source_list, query=True, value=True)
 
@@ -77,9 +107,10 @@ def set_character(character):
 
     current_character = pm.optionMenuGrp(character_list, query=True, value=True)
     if current_character != character_name:
-        pm.optionMenuGrp(character_list, edit=True, value=character_name)
-        pm.mel.eval('hikUpdateCurrentCharacterFromUI()')
-        pm.mel.eval('hikUpdateContextualUI()')    
+        _set_list(character_list, character_name, 'hikUpdateCurrentCharacterFromUI()')
+        #pm.optionMenuGrp(character_list, edit=True, value=character_name)
+        #pm.mel.eval('hikUpdateCurrentCharacterFromUI()')
+        #pm.mel.eval('hikUpdateContextualUI()')    
     
 
 def set_character_source(character, source: SourceType):
@@ -89,9 +120,10 @@ def set_character_source(character, source: SourceType):
 
     current_character = pm.optionMenuGrp(character_list, query=True, value=True)
     if current_character != character_name:
-        pm.optionMenuGrp(character_list, edit=True, value=character_name)
-        pm.mel.eval('hikUpdateCurrentCharacterFromUI()')
-        pm.mel.eval('hikUpdateContextualUI()')
+        _set_list(character_list, character_name, 'hikUpdateCurrentCharacterFromUI()')
+        #pm.optionMenuGrp(character_list, edit=True, value=character_name)
+        #pm.mel.eval('hikUpdateCurrentCharacterFromUI()')
+        #pm.mel.eval('hikUpdateContextualUI()')
            
     #I can't believe there's a prefix of ' ', but here we are  
     source_name = ''
@@ -111,9 +143,10 @@ def set_character_source(character, source: SourceType):
     if character and source_list:
         current_source = pm.optionMenuGrp(source_list, query=True, value=True)
         if current_source != source_name:
-            pm.optionMenuGrp(source_list, edit=True, value=source_name)
-            pm.mel.eval('hikUpdateCurrentSourceFromUI()')
-            pm.mel.eval('hikUpdateContextualUI()')
+            _set_list(source_list, source_name, 'hikUpdateCurrentSourceFromUI()')
+            #pm.optionMenuGrp(source_list, edit=True, value=source_name)
+            #pm.mel.eval('hikUpdateCurrentSourceFromUI()')
+            #pm.mel.eval('hikUpdateContextualUI()')
         
     
     
