@@ -33,7 +33,6 @@ import cg3dguru.animation.fbx
 import cg3dguru.utils
 
 
-
 class SpineException(Exception):
     """Thrown when an export is attempted without an upper spine bone defined"""
     pass
@@ -787,6 +786,11 @@ def get_mesh_skin_clusters(meshes):
             clusters.update(mesh_clusters[mesh])
             
     return clusters
+
+
+def get_non_intermediate_mesh_shapes(node):
+    shapes = [shape for shape in node.getShapes() if not shape.intermediateObject.get() and isinstance(shape, pm.nodetypes.Mesh)]
+    return shapes
     
 
 def get_skinned_data_sets(input_list):
@@ -805,10 +809,14 @@ def get_skinned_data_sets(input_list):
         elif isinstance(node, pm.nodetypes.SkinCluster):
             skin_clusters.add(node)
         elif isinstance(node, pm.nodetypes.Transform):
-            if isinstance(node.getShape(), pm.nodetypes.Mesh):
-                meshes.add(node.getShape())
-            else:
+            shapes = get_non_intermediate_mesh_shapes(node)
+            if len(shapes) > 1:
+                #What's this case and do we want to skip it?
+                pm.error(f"Skipping '{node.name()}'. Tool can't handle multiple mesh shapes. Please contact 3dcg guru for support.")
+            if not shapes:
                 transforms.add(node)
+            else:
+                meshes.add(shapes[0])
         else:
             pm.warning('Cascaduer Export: Ignoring object {}'.format(node.name()))
             
