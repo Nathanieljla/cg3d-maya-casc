@@ -1,4 +1,6 @@
 from pathlib import Path
+import time
+import enum
 
 from maya import OpenMayaUI as omui 
 import pymel.core as pm
@@ -34,6 +36,7 @@ def start_progress_bar(*args, **kwargs):
 
     kwargs['edit'] = True
     kwargs['beginProgress'] = True
+    kwargs['visible'] = True
     cmds.progressBar(gMainProgressBar, *args, **kwargs)
 
     
@@ -106,12 +109,12 @@ def _solve_joint_hierarchy(joints):
     return joint_hierarchy
 
   
-def _map_clone(org, clone, mapping):
-    mapping[org] = clone
-    mapping[clone] = org
+def _map_proxy(org, proxy, mapping):
+    mapping[org] = proxy
+    mapping[proxy] = org
     
-    ProxyData.add_data(clone)
-    org.message >> clone.proxySource
+    ProxyData.add_data(proxy)
+    org.message >> proxy.proxySource
     
     
 def new_world_matrix(transform, reset_scale):
@@ -135,7 +138,7 @@ def _clone_joints(children, parent, joint_hierarchy, clone_pairing):
         child_type = child.type()
         new_type = 'joint' if child_type == 'joint' or convert_transforms else 'transform'
         clone = pm.general.createNode(new_type, name=f"{CLONE_PREFIX}:{get_base_name(child)}", parent=parent, skipSelect=True)
-        _map_clone(child, clone, clone_pairing)
+        _map_proxy(child, clone, clone_pairing)
 
         if new_type == 'joint' and child_type == 'joint':
             clone.radius.set(child.radius.get())
@@ -181,172 +184,161 @@ def _Unhide_primary_attrs(obj):
     
     _lock_transform(obj, False)
     pm.setAttr(obj.visibility, lock=False)
-    
-    
-def _make_clean_copy(source_shape, mesh_cluster_mapping, temp_parent=None):
-    base_name = get_base_name(source_shape.getParent())
-    name = f"{CLONE_PREFIX}:{base_name}_TEMP"
 
-    skin_proxy = pm.duplicate(source_shape, name=name)[0]
 
-    _Unhide_primary_attrs(skin_proxy)
-    pm.makeIdentity(skin_proxy.fullPathName(), apply=True, t=True, r=True, s=True, n=False, pn=True)
-    pm.parent(skin_proxy.fullPathName(), world=True)
-    pm.makeIdentity(skin_proxy.fullPathName(), apply=True, t=True, r=True, s=True, n=False, pn=True)
-    pm.delete(skin_proxy.fullPathName(), constructionHistory=True)
-
-    clone_name = f"{CLONE_PREFIX}:{base_name}"
-    clone = pm.duplicate(skin_proxy, name=clone_name)[0]
-    _Unhide_primary_attrs(clone)
     
-    if temp_parent is not None:
-        skin_proxy.setParent(temp_parent)
+class CopyWeightType(enum.Enum):
+    FLOOD = enum.auto()
+    PER_VERT = enum.auto()
     
-    if source_shape in mesh_cluster_mapping:
-        for cluster in mesh_cluster_mapping[source_shape]:
-            mi = pm.animation.skinCluster(cluster, maximumInfluences=True, query=True)
-            influences = pm.animation.skinCluster(cluster, influence=True, query=True)
 
-            cloned_cluster = pm.animation.skinCluster(*influences, skin_proxy, mi=mi, multi=True, tsb=True) #test
-            pm.copySkinWeights(ss=cluster, ds=cloned_cluster, noMirror=True,
-                               surfaceAssociation='closestPoint', influenceAssociation='closestJoint')
+def _flood_copy(skin_proxy, skin_cluster_node, clone_pairing, originals, replacements, vertices):
+    original_warnings_state = cmds.scriptEditorInfo(query=True, suppressWarnings=True)
+    cmds.scriptEditorInfo(suppressWarnings=True)
+    
+    name = skin_proxy.name().split(":")[-1]
+    message = f"{name} weights"
+    edit_progress_bar(status=message, progress=0, maxValue=len(originals))
+    
+    try:       
+        skin_cluster_node.normalizeWeights.set(1)
+        pm.skinCluster(skin_cluster_node, edit=True, addInfluence=replacements, weight=0.0)    
+        
+        for idx, original in enumerate(originals):
+            replacement = replacements[idx]
+            pm.skinCluster(skin_cluster_node, edit=True, lockWeights=True, influence=original)
+            pm.skinCluster(skin_cluster_node, edit=True, lockWeights=True, influence=replacement)
             
-            pm.select(skin_proxy, replace=True)
-            pm.animation.skinCluster(skin_proxy, edit=True, rui=True)
-
-    return (clone, skin_proxy)
-
-
-
-
-def replace_skin_joint(skinned_mesh, old_joint, new_joint):
-    """
-    Replaces a joint in a skinCluster by transferring weights.
-
-    Args:
-        skinned_mesh (pm.PyNode): The skinned mesh.
-        old_joint (pm.PyNode): The old joint to replace.
-        new_joint (pm.PyNode): The new joint to replace with.
-    """
-    # Check that the joints exist
-    if not pm.objExists(old_joint) or not pm.objExists(new_joint):
-        pm.warning("One or both of the joints do not exist.")
-        return
-
-    # Get the skinCluster node from the mesh
-    skin_cluster_node = pm.general.PyNode(pm.mel.eval('findRelatedSkinCluster("{}")'.format(skinned_mesh)))
-
-    if not skin_cluster_node:
-        pm.warning(f"No skinCluster found on {skinned_mesh}.")
-        return
-
-    print(f"SkinCluster found: {skin_cluster_node}")
-
-    # Add the new joint as an influence, if it isn't already one
-    if new_joint not in skin_cluster_node.getInfluence():
-        pm.skinCluster(skin_cluster_node, edit=True, addInfluence=new_joint, weight=0)
-        print(f"Added {new_joint} as an influence.")
-
-    # Transfer weights from the old joint to the new joint
-    # The skinPercent command handles the weight transfer
-    # (The `transformValue` flag is the key for transferring weights from one influence to another)
-    all_vertices = skinned_mesh.vtx[:]
-    pm.skinPercent(skin_cluster_node, all_vertices, transformValue=[(old_joint, 0), (new_joint, 1)])
-    print(f"Transferred weights from {old_joint} to {new_joint}.")
-
-    # Lock weights on the new joint to prevent redistribution on removal
-    pm.skinCluster(skin_cluster_node, edit=True, lockWeights=True, influence=new_joint)
-    
-    # Remove the old joint from the skinCluster
-    pm.skinCluster(skin_cluster_node, edit=True, removeInfluence=old_joint)
-    print(f"Removed {old_joint} as an influence.")
-    
-    # Unlock weights on the new joint if you plan to continue editing them
-    pm.skinCluster(skin_cluster_node, edit=True, lockWeights=False, influence=new_joint)
-    print("Process complete.")
-
-# --- Example Usage ---
-# Make sure your scene contains a skinned mesh named 'pSphere1', and joints 'joint1' and 'joint2'
-# with 'joint1' already being an influence on the mesh.
-
-# To run the script, first set up your scene with the necessary objects.
-# Example:
-#   1. Create a sphere: `pm.polySphere()`
-#   2. Create two joints: `pm.joint(p=(0, 5, 0), n='old_joint_01')` and `pm.joint(p=(0, 10, 0), n='new_joint_01')`
-#   3. Skin the sphere to the old joint: `pm.skinCluster('old_joint_01', 'pSphere1')`
-
-# Call the function with your specific object and joint names
-# replace_skin_joint('pSphere1', 'old_joint_01', 'new_joint_01')
-
-
-
+        for idx, original in enumerate(originals):
+            replacement = replacements[idx]
+            pm.skinCluster(skin_cluster_node, edit=True, lockWeights=False, influence=original)
+            pm.skinCluster(skin_cluster_node, edit=True, lockWeights=False, influence=replacement)
+            pm.skinPercent(skin_cluster_node, vertices, transformValue=[(original, 0.0), (replacement, 1.0)], zeroRemainingInfluences=False, normalize=True)
+            pm.skinCluster(skin_cluster_node, edit=True, lockWeights=True, influence=original)
+            pm.skinCluster(skin_cluster_node, edit=True, lockWeights=True, influence=replacement)
             
+            edit_progress_bar(status=message, step=1)
+    except Exception as e:
+        raise e
+    finally:
+        cmds.scriptEditorInfo(suppressWarnings=original_warnings_state)
+        
+
+        
+def _per_vert_copy(skin_proxy, skin_cluster_node, clone_pairing, originals, replacements):
+    skin_cluster_node.normalizeWeights.set(2)
+    pm.skinCluster(skin_cluster_node, edit=True, addInfluence=replacements, weight=0.0)
+    
+    #make sure the original joints are unlocked
+    for og in originals:
+        pm.skinCluster(skin_cluster_node, edit=True, lockWeights=False, influence=og)
+
+    joint_to_idx = {element.inputs()[0]: element.index() for element in skin_cluster_node.matrix}
+    oldIdx_to_newIdx = {joint_to_idx[og]: joint_to_idx[clone_pairing[og]] for og in originals}
+
+    step_size = int(skin_cluster_node.wl.numElements() / 100)
+    total_steps = int(skin_cluster_node.wl.numElements() / step_size)
+        
+    message = f"Transferring {skin_proxy.name()} weights"
+    edit_progress_bar(status=message, progress=0, maxValue=total_steps)
+
+    for idx, vert_weights_entries in enumerate(skin_cluster_node.wl):
+        if idx and idx % step_size == 0:
+            edit_progress_bar(step=1)
+
+        vert_weights = vert_weights_entries.weights #vert_weights.index() returns the vertex number
+        new_weights = {}
+
+        for vert_weight in vert_weights:
+            joint_idx = vert_weight.index()
+            joint_influence = vert_weight.get()
+
+            vert_weight.set(0.0)
+            if joint_idx not in oldIdx_to_newIdx:
+                continue
+
+            #define the new weight values and clear the old ones.
+            new_weights[oldIdx_to_newIdx[joint_idx]] = joint_influence
+
+        for joint_idx, value in new_weights.items():
+            weight_entry = vert_weights.elementByLogicalIndex(joint_idx)
+            weight_entry.set(value)
+
+    for og in originals:
+        pm.skinCluster(skin_cluster_node, edit=True, removeInfluence=og)
+
+
 def _clone_meshes(meshes, mesh_parent, skinned_parent, clone_pairing):
     mesh_cluster_mapping = exchange.get_mesh_cluster_mappings()
-    clean_skins_group = pm.general.createNode('transform', name = f"{CLONE_PREFIX}:CLEAN_SKINS")
-    mesh_copies = {}
 
-    edit_progress_bar(progress=0, maxValue=len(meshes) * 2)
-    for source_shape in meshes:
-        message =f"Cleaning proxy of {source_shape.name()}"
-        edit_progress_bar(status=message, step=1)
+    for mesh_count, source_shape in enumerate(meshes):
+        message = f"Making proxy of {source_shape.name()}"
+        edit_progress_bar(status=message, progress=mesh_count, maxValue=len(meshes))
         pm.displayInfo(message)
-        
-        copies = _make_clean_copy(source_shape, mesh_cluster_mapping, clean_skins_group)
-        mesh_copies[source_shape] = copies
 
-    #Update to get the latest clusters generated from our skin proxies
-    mesh_cluster_mapping = exchange.get_mesh_cluster_mappings()    
-    for source_shape, copies in mesh_copies.items():
-        message = f"Finalizing proxy for {source_shape.name()}"
-        edit_progress_bar(status=message, step=1)
-        pm.displayInfo(message)
-        
-        clone, skin_proxy = copies
-        _map_clone(source_shape, clone, clone_pairing)
+        base_name = get_base_name(source_shape.getParent())
+        name = f"{CLONE_PREFIX}:{base_name}"
+        mesh_proxy = pm.duplicate(source_shape, name=name)[0]
+
+        _Unhide_primary_attrs(mesh_proxy)
+        pm.makeIdentity(mesh_proxy.fullPathName(), apply=True, t=True, r=True, s=True, n=False, pn=True)
+        pm.parent(mesh_proxy.fullPathName(), world=True)
+        pm.makeIdentity(mesh_proxy.fullPathName(), apply=True, t=True, r=True, s=True, n=False, pn=True)
+        pm.delete(mesh_proxy.fullPathName(), constructionHistory=True)
+        _map_proxy(source_shape, mesh_proxy, clone_pairing)
 
         if source_shape not in mesh_cluster_mapping:
-            clone.setParent(mesh_parent)
+            mesh_proxy.setParent(mesh_parent)
             continue
-
-        clone.setParent(skinned_parent)
-        for cluster in mesh_cluster_mapping[skin_proxy.getShape()]:
-            mi = pm.animation.skinCluster(cluster, maximumInfluences=True, query=True)
-            influences = pm.animation.skinCluster(cluster, influence=True, query=True)
-            cloned_influences = [clone_pairing[i] for i in influences]
-
-            cloned_cluster = pm.animation.skinCluster(*cloned_influences, clone, mi=mi, multi=True, tsb=True)
+        else:
+            mesh_proxy.setParent(skinned_parent)
             
-            _map_clone(cluster, cloned_cluster, clone_pairing)
-            pm.animation.skinCluster(cloned_cluster, normalizeWeights =0, edit=True)
-            index_mapping = _get_index_mapping(cluster, cloned_cluster, clone_pairing)
-            cloned_cluster.wl.setNumElements(cluster.wl.numElements())
+            for cluster in mesh_cluster_mapping[source_shape]:
+                mi = pm.animation.skinCluster(cluster, maximumInfluences=True, query=True)
+                influences = pm.animation.skinCluster(cluster, influence=True, query=True)
+    
+                cloned_cluster = pm.animation.skinCluster(*influences, mesh_proxy, mi=mi, multi=True, tsb=True) #test
+                pm.copySkinWeights(ss=cluster, ds=cloned_cluster, noMirror=True,
+                                   surfaceAssociation='closestPoint', influenceAssociation='closestJoint')
+                
+                pm.select(mesh_proxy, replace=True)
+                pm.animation.skinCluster(mesh_proxy, edit=True, rui=True) #remove unused influences
+
+                pm.animation.skinCluster(cloned_cluster, edit=True, obeyMaxInfluences=False)
             
-            for weight in cluster.wl:
-                cw = cloned_cluster.wl.elementByPhysicalIndex(weight.index())
-                wws = weight.weights
-                cws = cw.weights
-                
-                #clear all the weights
-                for i in range(0, cws.numElements()):
-                    cws.elementByPhysicalIndex(i).set(0)
-                
-                for e in wws:
-                    index = e.index()
-                    if index not in index_mapping:
-                        pm.warning(f"Index issue was found for skinned mesh {skin_proxy}.  Index value:{index}.")
-                        continue
+                originals = cloned_cluster.getInfluence()
+                replacements = [clone_pairing[i] for i in originals]
+                skinned_geometry = cloned_cluster.getGeometry()[0]
+                vertices = skinned_geometry.vtx[:]
+                prune = False
+                copy_method = CopyWeightType.FLOOD
+
+                match copy_method:
+                    case CopyWeightType.FLOOD:
+                        prune = True
+                        _flood_copy(mesh_proxy, cloned_cluster, clone_pairing, originals, replacements, vertices)
+            
+                    case CopyWeightType.PER_VERT:
+                        _per_vert_copy(mesh_proxy, cloned_cluster, clone_pairing, originals, replacements)
+
+                cloned_cluster.normalizeWeights.set(2)
+                for original in originals:
+                    pm.skinCluster(cloned_cluster, edit=True, removeInfluence=original)
                     
-                    target = cws.elementByLogicalIndex(index_mapping[index])
-                    target.set(e.get())
-       
-            pm.animation.skinCluster(cloned_cluster, normalizeWeights=1, edit=True)
+                for influence in cloned_cluster.getInfluence():
+                    pm.skinCluster(cloned_cluster, edit=True, lockWeights=False, influence=influence)
+                    
+                cloned_cluster.normalizeWeights.set(1)
+                #pm.animation.skinCluster(cloned_cluster, normalizeWeights=1, edit=True)
+                if prune:
+                    pm.animation.skinPercent(cloned_cluster, vertices, pruneWeights=0.005)
+                else:
+                    pm.animation.skinCluster(cloned_cluster, forceNormalizeWeights=True, edit=True)
 
-    pm.delete(clean_skins_group)
-            
-            
+      
+      
 
-def create_export_set(name='', auto_add_selected=False) -> pm.nodetypes.ObjectSet :
+def create_export_set(name='', auto_add_selected=False) -> pm.nodetypes.ObjectSet:
     if not name:
         data_name, ok = QInputDialog.getText(None, "New Node Name", 'Name this data')
         if not ok:
@@ -438,14 +430,19 @@ def _derig_selection():
     skinned_meshes_root = pm.general.createNode('transform', name = f"{CLONE_PREFIX}:skinned_meshes", parent=root)
     ProxyRoot.add_data(skinned_meshes_root).rootType.set(3)
     skinned_meshes_root.inheritsTransform.set(0)
-    
+
+    start_time = time.perf_counter()
     _clone_meshes(meshes, meshes_root, skinned_meshes_root, clone_pairing)
+    end_time = time.perf_counter()
+    elapsed_time = end_time - start_time
+    print(f"The function took {elapsed_time:.4f} seconds to run.")
+    #waitress 76.3239 second with manual weight copy
     
     null_children = [child for child in root.getChildren() if not child.getChildren()]
     if null_children:
         pm.general.delete(null_children)
-        
-    constraints = [child for child in pm.listRelatives(root, allDescendents =True, type="transform") if isinstance(child, pm.nodetypes.Constraint)]
+  
+    constraints = [child for child in pm.listRelatives(root, allDescendents=True, type="transform") if isinstance(child, pm.nodetypes.Constraint)]
     if constraints:
         pm.general.delete(constraints) 
     
@@ -470,7 +467,7 @@ def constrain_proxy():
         #We have multiple proxies in the scene, so we need to do some extra work to find the right proxy
         export_nodes = exchange.get_export_nodes()
         pm.warning("add support for finding one of many proxy rigs")
-        
+
     else:
         joint_root = joint_roots[0]
         
