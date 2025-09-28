@@ -22,6 +22,12 @@ class TextureConversionType(enum.Enum):
     
     CUSTOM = 'Custom'
     """Texture location is stored on each export node"""
+    
+    
+class CopyWeightType(enum.Enum):
+    SWAP = 'Swap'
+    FLOOD = 'Flood'
+    PER_VERT = 'Per Vert'
 
 
 class _PreferenceData(object):
@@ -31,7 +37,7 @@ class _PreferenceData(object):
         self.bake_animations = OptionEnum.ALWAYS
         self.texture_conversion = TextureConversionType.NEVER
         self.derig_reset_joint_scale = True
-        self.derig_maintain_offset = False
+        self.derig_maintain_offset = True
         
         if old_prefs is not None:
             try:
