@@ -133,8 +133,11 @@ def get_base_name(obj):
 def _clone_joints(children, parent, joint_hierarchy, clone_pairing):
     reset_scale = preferences.get().derig_reset_joint_scale
     convert_transforms = False
-    
+
+    edit_progress_bar(status='Cloning Joints', progress=0, maxValue=len(children))
+
     for child in children:
+        edit_progress_bar(status='Cloning Joints', step=1)
         child_type = child.type()
         new_type = 'joint' if child_type == 'joint' or convert_transforms else 'transform'
         clone = pm.general.createNode(new_type, name=f"{CLONE_PREFIX}:{get_base_name(child)}", parent=parent, skipSelect=True)
@@ -149,7 +152,7 @@ def _clone_joints(children, parent, joint_hierarchy, clone_pairing):
         next_children = joint_hierarchy.get(child, [])
         if next_children:
             _clone_joints(next_children, clone, joint_hierarchy, clone_pairing)
-            
+
           
 def _get_index_mapping(source_cluster, cloned_cluster, clone_pairing):
     cloned_indices = {element.inputs()[0]: element.index() for element in cloned_cluster.matrix}
@@ -184,26 +187,103 @@ def _Unhide_primary_attrs(obj):
     
     _lock_transform(obj, False)
     pm.setAttr(obj.visibility, lock=False)
-
-
-    
-class CopyWeightType(enum.Enum):
-    FLOOD = enum.auto()
-    PER_VERT = enum.auto()
     
 
-def _flood_copy(skin_proxy, skin_cluster_node, clone_pairing, originals, replacements, vertices):
-    original_warnings_state = cmds.scriptEditorInfo(query=True, suppressWarnings=True)
-    cmds.scriptEditorInfo(suppressWarnings=True)
+def _replace(p1, p1_idx, p2, p2_idx, skin_cluster_node, attr_list):
+    new_data = attr_list.elementByLogicalIndex(p1_idx)
+    old_data = attr_list.elementByLogicalIndex(p2_idx)
+
+    list_locked = attr_list.isLocked()
+    old_data_locked = old_data.isLocked()
     
+    attr_list.unlock()    
+    old_data.unlock()
+    new_data.unlock()
+
+    new_plug = new_data.inputs(plugs=True)
+    if new_plug:
+        pm.connectAttr(new_plug[0], old_data, force=True)
+    else:
+        old_data.set(new_data.get())
+        
+    attr_list[p1_idx].unlock()
+    pm.removeMultiInstance(new_data, b=True)
+    old_data.lock(old_data_locked)
+    attr_list.lock(list_locked)
+
+
+def _copy_swap(skin_proxy, skin_cluster_node, clone_pairing, originals, replacements):
     name = skin_proxy.name().split(":")[-1]
-    message = f"{name} weights"
+    message = f"Cloning {name} weights"
     edit_progress_bar(status=message, progress=0, maxValue=len(originals))
     
-    try:       
+    skin_cluster_node.normalizeWeights.set(0)
+    pm.skinCluster(skin_cluster_node, edit=True, addInfluence=replacements, weight=0.0)
+    
+    joint_indices = {}
+    for idx, matrix in enumerate(skin_cluster_node.matrix):
+        connections = pm.listConnections(matrix, source=True, plugs=False)
+        if not connections:
+            continue
+
+        source_joint = connections[0]
+        if source_joint not in clone_pairing:
+            #this case shouldn't be posssible.
+            pm.warning(f"{source_joint.name()} isn't be replaced? That shouldn't be possible.")
+            continue
+        
+        joint_indices[source_joint] = matrix.index()
+
+
+    bind_pose_node = skin_cluster_node.bindPose.inputs(plugs=True, type='dagPose')
+    if bind_pose_node:
+        pm.disconnectAttr(bind_pose_node[0], skin_cluster_node.bindPose)
+        
+    for joint, idx in joint_indices.items():
+        edit_progress_bar(status=message, step=1)
+        if joint not in replacements:
+            continue
+        
+        p1 = joint
+        p1_idx = idx
+        p2 = clone_pairing[joint]
+        p2_idx = joint_indices[p2]
+
+        _replace(p1, p1_idx, p2, p2_idx, skin_cluster_node, skin_cluster_node.bindPreMatrix)
+        _replace(p1, p1_idx, p2, p2_idx, skin_cluster_node, skin_cluster_node.matrix)
+
+        connections = pm.listConnections(p2, destination=True,
+                                         connections=True, plugs=True, sourceFirst=True, t='skinCluster',
+                                         skipConversionNodes=True)
+
+        for connection in connections:
+            source_plug = connection[0]
+            destination_plug = connection[1]
+            if destination_plug.node() != skin_cluster_node:
+                continue
+            #print(f"disconnecting: {source_plug} and {destination_plug}")
+            pm.disconnectAttr(source_plug, destination_plug)
+
+    try:
+        bind_pose = pm.dagPose(skin_cluster_node.getInfluence(), save=True,
+                               bindPose=True, name=f'{skin_cluster_node.name()}_BindPose')
+        bind_pose.message >> skin_cluster_node.bindPose
+    except Exception as e:
+        print(e)
+
+
+def _copy_flood(skin_proxy, skin_cluster_node, clone_pairing, originals, replacements, vertices):
+    original_warnings_state = cmds.scriptEditorInfo(query=True, suppressWarnings=True)
+    cmds.scriptEditorInfo(suppressWarnings=True)
+
+    name = skin_proxy.name().split(":")[-1]
+    message = f"Cloning {name} weights"
+    edit_progress_bar(status=message, progress=0, maxValue=len(originals))
+
+    try:
         skin_cluster_node.normalizeWeights.set(1)
         pm.skinCluster(skin_cluster_node, edit=True, addInfluence=replacements, weight=0.0)    
-        
+
         for idx, original in enumerate(originals):
             replacement = replacements[idx]
             pm.skinCluster(skin_cluster_node, edit=True, lockWeights=True, influence=original)
@@ -224,8 +304,7 @@ def _flood_copy(skin_proxy, skin_cluster_node, clone_pairing, originals, replace
         cmds.scriptEditorInfo(suppressWarnings=original_warnings_state)
         
 
-        
-def _per_vert_copy(skin_proxy, skin_cluster_node, clone_pairing, originals, replacements):
+def _copy_per_vert(skin_proxy, skin_cluster_node, clone_pairing, originals, replacements):
     skin_cluster_node.normalizeWeights.set(2)
     pm.skinCluster(skin_cluster_node, edit=True, addInfluence=replacements, weight=0.0)
     
@@ -237,9 +316,12 @@ def _per_vert_copy(skin_proxy, skin_cluster_node, clone_pairing, originals, repl
     oldIdx_to_newIdx = {joint_to_idx[og]: joint_to_idx[clone_pairing[og]] for og in originals}
 
     step_size = int(skin_cluster_node.wl.numElements() / 100)
+    if step_size < 1:
+        step_size = 1
     total_steps = int(skin_cluster_node.wl.numElements() / step_size)
-        
-    message = f"Transferring {skin_proxy.name()} weights"
+
+    name = skin_proxy.name().split(":")[-1]
+    message = f"Cloning {name} weights"
     edit_progress_bar(status=message, progress=0, maxValue=total_steps)
 
     for idx, vert_weights_entries in enumerate(skin_cluster_node.wl):
@@ -264,12 +346,12 @@ def _per_vert_copy(skin_proxy, skin_cluster_node, clone_pairing, originals, repl
             weight_entry = vert_weights.elementByLogicalIndex(joint_idx)
             weight_entry.set(value)
 
-    for og in originals:
-        pm.skinCluster(skin_cluster_node, edit=True, removeInfluence=og)
-
 
 def _clone_meshes(meshes, mesh_parent, skinned_parent, clone_pairing):
     mesh_cluster_mapping = exchange.get_mesh_cluster_mappings()
+
+    copy_method = preferences.CopyWeightType.SWAP
+    print(f"Cloning weights via {copy_method} method.")
 
     for mesh_count, source_shape in enumerate(meshes):
         message = f"Making proxy of {source_shape.name()}"
@@ -303,7 +385,6 @@ def _clone_meshes(meshes, mesh_parent, skinned_parent, clone_pairing):
                 
                 pm.select(mesh_proxy, replace=True)
                 pm.animation.skinCluster(mesh_proxy, edit=True, rui=True) #remove unused influences
-
                 pm.animation.skinCluster(cloned_cluster, edit=True, obeyMaxInfluences=False)
             
                 originals = cloned_cluster.getInfluence()
@@ -311,25 +392,29 @@ def _clone_meshes(meshes, mesh_parent, skinned_parent, clone_pairing):
                 skinned_geometry = cloned_cluster.getGeometry()[0]
                 vertices = skinned_geometry.vtx[:]
                 prune = False
-                copy_method = CopyWeightType.FLOOD
+                remove_originals = True
 
                 match copy_method:
-                    case CopyWeightType.FLOOD:
+                    case preferences.CopyWeightType.SWAP: #Mazu: 19.8838, Waitress: 4.5856,
+                        remove_originals = False
+                        _copy_swap(mesh_proxy, cloned_cluster, clone_pairing, originals, replacements)
+
+                    case preferences.CopyWeightType.FLOOD: #Mazu: 158.3618, Waitress: 18.1239,
                         prune = True
-                        _flood_copy(mesh_proxy, cloned_cluster, clone_pairing, originals, replacements, vertices)
+                        _copy_flood(mesh_proxy, cloned_cluster, clone_pairing, originals, replacements, vertices)
             
-                    case CopyWeightType.PER_VERT:
-                        _per_vert_copy(mesh_proxy, cloned_cluster, clone_pairing, originals, replacements)
+                    case preferences.CopyWeightType.PER_VERT: #Mazu: 138.2624, Waitress: 70.3756,
+                        _copy_per_vert(mesh_proxy, cloned_cluster, clone_pairing, originals, replacements)
 
                 cloned_cluster.normalizeWeights.set(2)
-                for original in originals:
-                    pm.skinCluster(cloned_cluster, edit=True, removeInfluence=original)
-                    
+                if remove_originals:
+                    for original in originals:
+                        pm.skinCluster(cloned_cluster, edit=True, removeInfluence=original)
+
                 for influence in cloned_cluster.getInfluence():
                     pm.skinCluster(cloned_cluster, edit=True, lockWeights=False, influence=influence)
                     
                 cloned_cluster.normalizeWeights.set(1)
-                #pm.animation.skinCluster(cloned_cluster, normalizeWeights=1, edit=True)
                 if prune:
                     pm.animation.skinPercent(cloned_cluster, vertices, pruneWeights=0.005)
                 else:
@@ -417,7 +502,6 @@ def _derig_selection():
     skeleton_root = pm.general.createNode('transform', name=f"{CLONE_PREFIX}:skel_root", parent=root)
     ProxyRoot.add_data(skeleton_root).rootType.set(1)
 
-    edit_progress_bar(status='Cloning Joints', step=50)
     _clone_joints(joint_hierarchy[None], skeleton_root, joint_hierarchy, clone_pairing)
     
     cloned_root_joints = [clone_pairing[joint] for joint in joint_hierarchy[None]]
