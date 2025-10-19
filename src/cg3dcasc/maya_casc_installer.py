@@ -1399,10 +1399,9 @@ class MyInstaller(ModuleManager):
                 scripts_dir.joinpath('wingcarrier'), casc_site.joinpath('wingcarrier')
             )
             
-            pip_args = [r'--target={0}'.format(casc_site)]
-            Commandline.pip_install('cg3d-casc-core', pip_args=pip_args) #'https://github.com/Nathanieljla/cg3d-casc-core/archive/refs/heads/main.zip', pip_args=pip_args)
+            #pip_args = [r'--target={0}'.format(casc_site)]
+            #Commandline.pip_install('cg3d-casc-core', pip_args=pip_args) #'https://github.com/Nathanieljla/cg3d-casc-core/archive/refs/heads/main.zip', pip_args=pip_args)
 
-                
             #zf casc_site.exists():
                 #for child in casc_site.iterdir():
                     #dest = self.my_data_dir.joinpath(child.name)
