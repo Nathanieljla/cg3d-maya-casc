@@ -12,12 +12,18 @@ import csc
 import rig_mode.on as rm_on
 import rig_mode.off as rm_off
 
+from . import server
+
 import pycsc as cg3dguru
 import pycsc.general.fbx as fbx
 
 
+
 MAYA_BEHAVIOUR_NAME = 'Maya Data'
 MAYA_ROOTS = 'Maya Roots'
+
+
+ACTIVE_PORT_ID = 6000
 
 
 def _import_maya_qrig_file(file_path):
@@ -286,6 +292,9 @@ def update_textures():
     scene = cg3dguru.get_current_scene().ds
     _load_textures(scene)
     
+
+    
+
     
 
 ##----Export functions---- 
@@ -300,8 +309,37 @@ def _select_for_export(scene, new_selection):
     scene.select(new_selection)
     #scene.select_frame_range()
     
+
+#def send_command_to_maya(cmd):
+    #import wingcarrier.pigeons
     
-def _export(cmd_string):
+    #cmd = f"import cg3dcasc.core; cg3casc.core.clien.port = {}; {cmd}"
+    #maya = wingcarrier.pigeons.MayaPigeon()
+    #maya.command_port = ACTIVE_PORT_ID
+    
+    #if maya.send_python_command(cmd):
+        #return (True, maya.response)
+    #else:
+        #return (False, "")
+
+    
+def get_set_ids():
+    """Return a list of ids in the current scene"""
+    
+    cmd = "cg3dcasc.core.get_set_ids()"
+    successs, data = server.send_to_maya(ACTIVE_PORT_ID, cmd)
+
+
+
+def get_coord_system():
+    """returns the active coordinate system in Maya"""
+    
+    cmd = "cg3dcasc.core.get_coord_system()"
+    success, data = server.send_to_maya(ACTIVE_PORT_ID, cmd)
+
+    
+
+def _export(cmd):
     new_object = None
     def _create_new_set(scene):
         print("Making new set")
@@ -364,10 +402,12 @@ def _export(cmd_string):
             #TODO: Change this to selection, once we know how to select a branch
             fbx.export_fbx(export_path, fbx.FbxFilterType.SELECTED) 
         
- 
-    import wingcarrier.pigeons
-    maya = wingcarrier.pigeons.MayaPigeon()    
-    maya.send_python_command(cmd_string)
+
+    success, data = server.send_to_maya(ACTIVE_PORT_ID, cmd)
+    #import wingcarrier.pigeons
+    #maya = wingcarrier.pigeons.MayaPigeon()
+    #maya.command_port = ACTIVE_PORT_ID
+    #maya.send_python_command(cmd_string)
     
     ##something isn't working here
     #scene.edit('Reset selection', lambda x: scene.select(list(selected)))
@@ -375,7 +415,7 @@ def _export(cmd_string):
         
         
 def export_maya_animation():
-    cmd = "import cg3dcasc.core; cg3dcasc.core.import_fbx()"
+    cmd = "cg3dcasc.core.import_fbx()"
     _export(cmd)
     
     

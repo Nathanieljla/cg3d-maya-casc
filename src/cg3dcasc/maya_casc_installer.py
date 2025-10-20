@@ -1371,7 +1371,7 @@ class MyInstaller(ModuleManager):
         if not self.nekki_dir.exists():
             #self.clean_folder(pathlib.Path(self.scripts_path))
             return False
-        
+
         self.my_data_dir = local_path.joinpath('CG_3D_Guru', 'Cascadeur')
         if not self.my_data_dir.exists():
             shutil.rmtree(self.my_data_dir, ignore_errors=True)

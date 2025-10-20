@@ -31,6 +31,7 @@ import wingcarrier.pigeons
 import cg3dguru.udata
 import cg3dguru.animation.fbx
 import cg3dguru.utils
+from . import client
 
 
 class SpineException(Exception):
@@ -355,79 +356,6 @@ TWIST_AXES = {
 
 _ACTIVE_CHARACTER_NODE = None
 _ACTIVE_USER_DATA = None
-
-
-#class QRigData(cg3dguru.udata.BaseData):
-    #"""A block of data to help convert an HIK character to Cascaduer's quick rig"""
-
-
-    #@staticmethod
-    #def get_attributes():
-        #attrs = [
-            #cg3dguru.udata.create_attr('characterNode', 'message'),
-            #cg3dguru.udata.create_attr('chestJoint', 'message'),
-            #cg3dguru.udata.create_attr('leftWeapon', 'message'),
-            #cg3dguru.udata.create_attr('rightWeapon', 'message'),
-            #cg3dguru.udata.create_attr('alignPelvis', 'bool'),
-            #cg3dguru.udata.create_attr('createLayers', 'bool'),
-            
-            #cg3dguru.udata.Attr('leftArmTwist', 'enum', enumName='X:Y:Z'),
-            #cg3dguru.udata.Attr('leftForearmTwist', 'enum', enumName='X:Y:Z'),
-            
-            #cg3dguru.udata.Attr('leftUpperLegTwist', 'enum', enumName='X:Y:Z'),
-            #cg3dguru.udata.Attr('leftLegTwist', 'enum', enumName='X:Y:Z'),
-            
-            #cg3dguru.udata.Attr('rightArmTwist', 'enum', enumName='X:Y:Z'),
-            #cg3dguru.udata.Attr('rightForearmTwist', 'enum', enumName='X:Y:Z'),
-            
-            #cg3dguru.udata.Attr('rightUpperLegTwist', 'enum', enumName='X:Y:Z'),
-            #cg3dguru.udata.Attr('rightLegTwist', 'enum', enumName='X:Y:Z'), 
-            
-            ##cg3dguru.udata.Compound('twistAxes', 'compound', children =[
-                ##cg3dguru.udata.Attr('leftArm', 'enum', enumName='X:Y:Z'),
-                ##cg3dguru.udata.Attr('leftForearm', 'enum', enumName='X:Y:Z'),
-                ##cg3dguru.udata.Attr('leftUpLeg', 'enum', enumName='X:Y:Z'),
-                ##cg3dguru.udata.Attr('leftLeg', 'enum', enumName='X:Y:Z'),
-                ##cg3dguru.udata.Attr('rightArm', 'enum', enumName='X:Y:Z'),
-                ##cg3dguru.udata.Attr('rightForearm', 'enum', enumName='X:Y:Z'),
-                ##cg3dguru.udata.Attr('rightUpLeg', 'enum', enumName='X:Y:Z'),
-                ##cg3dguru.udata.Attr('rightLeg', 'enum', enumName='X:Y:Z'), 
-            ##])
-            
-        #]
-        
-        #return attrs
-    
-    #@classmethod
-    #def post_create(cls, data):
-        #data.createLayers.set(1)
-        
-    
-    
-#class CascExportData(cg3dguru.udata.BaseData):
-    #"""A list for nodes that should always be sent to cascadeur
-    
-    #The CascExportData.exportNodes attribute can store meshes, joints, and
-    #skinClusters. Meshes, joints and skinClusters will be inspected to find
-    #all dependent joints and meshes. E.g. add a skinCluster and all joints
-    #will be exported (as well as the meshes they deform).
-    #"""
-    
-    #@staticmethod
-    #def get_attributes():
-        #attrs = [
-            #cg3dguru.udata.create_attr('cscDataId', 'string'),
-            #cg3dguru.udata.create_attr('dynamicSet', 'bool')
-        #]
-        
-        #return attrs
-    
-    #@classmethod
-    #def post_create(cls, data):
-        #unique_id = uuid.uuid1()
-        #data.cscDataId.set(str(unique_id))
-        #data.cscDataId.lock()
-        #data.dynamicSet.set(1)
 
 
 
@@ -1289,8 +1217,24 @@ def import_fbx():
                 
         if qrig_path:
             print("Can't import rigs at the moment")
-            
-            
+
+
+def get_set_ids():
+    data = []
+    scene_sets = pm.ls(type='objectSet')
+    export_sets = cg3dguru.udata.Utils.get_nodes_with_data(scene_sets, data_class=CascExportData)
+
+    for export_set in export_sets:
+        print(export_set)
+        data = ["1", 2]
+        
+    client.send_to_casc(data)
+ 
+
+def get_coord_system():
+    data = pm.cmds.upAxis(q=True, axis=True)
+    client.send_to_casc(data)
+
             
 def run():
     pass
