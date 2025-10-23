@@ -1,29 +1,26 @@
+
+
+
 import json
-import typing
+#import typing
 import tempfile
 import os
 import pathlib
-import uuid
+#import uuid
 
-import common.hierarchy
-import rig_gen.add_support_info as rg_s_inf
-import commands.rig_info.add_joints as aj
+import common.hierarchy as hierarchy
+#import rig_gen.add_support_info as rg_s_inf
+#import commands.rig_info.add_joints as aj
 import csc
+import pycsc
 import rig_mode.on as rm_on
-import rig_mode.off as rm_off
+#import rig_mode.off as rm_off
 
-from . import server
+#from . import server
 
-import pycsc as cg3dguru
-import pycsc.general.fbx as fbx
+from . import common
+from . import fbx
 
-
-
-MAYA_BEHAVIOUR_NAME = 'Maya Data'
-MAYA_ROOTS = 'Maya Roots'
-
-
-ACTIVE_PORT_ID = 6000
 
 
 def _import_maya_qrig_file(file_path):
@@ -33,15 +30,12 @@ def _import_maya_qrig_file(file_path):
     rig_tool = csc.app.get_application().get_tools_manager().get_tool('RiggingToolWindowTool').editor(application_scene)
     rig_tool.open_quick_rigging_tool()
     rig_tool.load_template_by_fileName(file_path)
-    rig_tool.generate_rig_elements()
+    #rig_tool.generate_rig_elements()
     
-
     
 def _get_object_by_id(object_list, maya_id):
-    global MAYA_BEHAVIOUR_NAME
-    
     for obj in object_list:
-        beh = obj.get_behaviour_by_name(MAYA_BEHAVIOUR_NAME)
+        beh = obj.get_behaviour_by_name(common.MAYA_BEHAVIOUR_NAME)
         if beh:
             found_id = beh.datasWithSameNamesReadonly.get_by_name('maya_id')
             if found_id and found_id[0].get() == maya_id:
@@ -51,12 +45,11 @@ def _get_object_by_id(object_list, maya_id):
     return None
 
 
-
 def _make_rig_info(scene, set_name, new_roots):
     #make a rig info and select it.
     new_selection = []
     for root in new_roots:
-        new_selection.extend(common.hierarchy.get_object_branch_inclusive(root, root.scene))
+        new_selection.extend(hierarchy.get_object_branch_inclusive(root, root.scene))
         
     scene.edit('Change selection', lambda x: scene.select(new_selection))
     joints = scene.get_scene_objects(of_type='Joint')
@@ -82,22 +75,6 @@ def _make_rig_info(scene, set_name, new_roots):
 
 
 
-def _create_data(scene, set_name, maya_id, new_roots):
-    global MAYA_BEHAVIOUR_NAME
-     
-    #make the selection/object set   
-    obj = scene.create_object(set_name)
-    behaviour = obj.add_behaviour('Dynamic', MAYA_BEHAVIOUR_NAME)
-    data_prop = behaviour.get_property('datasWithSameNamesReadonly')
-    data_prop.create_data('maya_id', csc.model.DataMode.Static, maya_id, group_name='{} update'.format(MAYA_BEHAVIOUR_NAME))
-    
-    roots_behaviour = obj.add_behaviour('DynamicBehaviour', MAYA_ROOTS)
-    roots_behaviour.behaviours.set( [obj.Basic for obj in new_roots] )
-    
-    return obj
-    
-    
-    
 def _get_modified_filter(existing_data, qrig_path, import_filter: fbx.FbxFilterType):
     if import_filter == fbx.FbxFilterType.ANIMATION:
         if not existing_data:
@@ -127,9 +104,9 @@ def _get_modified_filter(existing_data, qrig_path, import_filter: fbx.FbxFilterT
             return fbx.FbxFilterType.ANIMATION
     else:
         raise (Exception("Add support for {}".format(import_filter)))
-    
-    
-    
+
+
+
 def _load_textures(scene):
     def mod(scene):
         temp_dir = pathlib.Path(os.path.join(tempfile.gettempdir(), 'mayacasc'))
@@ -139,68 +116,67 @@ def _load_textures(scene):
             texture_data = open(texture_path)
             texture_mapping = json.load(texture_data)
             texture_data.close()
-            
+
             names = list(texture_mapping.keys())
             if not names:
                 return
-            
+
             objs = scene.get_scene_objects(names=names)
             for obj in objs:
                 if not obj.has_behaviour('MeshObject'):
                     print("Can't find MeshObject for {}".format(obj.name))
                     continue
-                 
+
                 if not obj.has_behaviour('TextureContainer'):
                     obj.add_behaviour('TextureContainer')
                     obj.TextureContainer.start_frame.create_data('Start frame', csc.model.DataMode.Static, 0, group_name='maya_textures')
-                 
+
                 filenames = texture_mapping[obj.name]
                 container = obj.TextureContainer
                 textures = container.texture_paths.get()
                 for texture in textures:
-                    d_id = texture.id
+                    d_id = texture.id #crash point
                     container.texture_paths.remove(texture)
                     container.de.delete_data(d_id)
-                    
+
                 for idx, filename in enumerate(filenames):
                     data_name = f"texture {idx}"
                     container.texture_paths.create_data(data_name, csc.model.DataMode.Static, filename, group_name='maya_textures')
-                    
-                    
+
+
                 obj.MeshObject.textures.set(obj.TextureContainer)
-     
+
     #mod(scene)               
     scene.edit("Load Textures", mod)
-    
-    
-    
+
+
 def _import_maya(new_scene, import_filter: fbx.FbxFilterType):
     if new_scene:
-        scene = cg3dguru.new_scene().ds
+        scene = pycsc.new_scene().ds
     else:
-        scene = cg3dguru.get_current_scene().ds
+        scene = pycsc.get_current_scene().ds
 
     scene.info("Importing Maya Data")
     temp_dir = pathlib.Path(os.path.join(tempfile.gettempdir(), 'mayacasc'))
     if not temp_dir.exists():
         scene.error("Can't find Maya data")
         return
-    
-        
+
+
     #pre_import_roots will allow me to find everything that's new to the
     #scene once all files are imported.  scene_roots will be updated
     #after each file import has been completed.
     pre_import_roots = set(scene.get_scene_objects(only_roots=True))
     scene_roots = set(pre_import_roots)
-    
+
     files = {}
     for child in temp_dir.iterdir():
         name, ext = child.name.rsplit('.', 1)
         if name not in files:
             files[name] = dict()
-            
+
         files[name][ext.lower()] = str(child)
-        
+
     import_rig = ''
     for key, item in files.items():
         fbx_path = ''
@@ -209,19 +185,19 @@ def _import_maya(new_scene, import_filter: fbx.FbxFilterType):
             fbx_path = item['fbx']
         if 'qrigcasc' in item:
             qrig_path = item['qrigcasc']
-            
+
         if not fbx_path and not qrig_path:
             #we'll skip files that don't match the name.id format
             #the texture file is an example of one of these files
             continue
-        
+
         if qrig_path:
             import_rig = qrig_path
-            
+
         set_name, maya_id = key.split('.') 
         existing_data = _get_object_by_id(pre_import_roots, maya_id)
         modified_filter = _get_modified_filter(existing_data, qrig_path, import_filter)
-        
+
         if modified_filter != fbx.FbxFilterType.SKIP:
             #To-Do: Find a way to make this update the mesh for exsting data
             #
@@ -230,15 +206,15 @@ def _import_maya(new_scene, import_filter: fbx.FbxFilterType):
                 ##just update the mesh...I think.
                 #root_beh = existing_data.get_behaviour_by_name(MAYA_ROOTS)
                 #roots = [beh.object for beh in root_beh.behaviours.get()]
-                
+
                 #new_selection = []
                 #for root in roots:
                     #new_selection.extend(common.hierarchy.get_object_branch_inclusive(root, root.scene.dom_scene))
-                    
+
                 #scene.edit('Change selection', lambda x: scene.select(new_selection))
-                
+
             fbx.import_fbx(fbx_path, modified_filter)
-            
+
             current_roots = set(scene.get_scene_objects(only_roots=True))
             new_roots = current_roots.difference(scene_roots)
             scene_roots = current_roots               
@@ -247,16 +223,16 @@ def _import_maya(new_scene, import_filter: fbx.FbxFilterType):
         #Let's find the stuff that was just imported and create a way
         #to search for it later.
         if existing_data is None and modified_filter != fbx.FbxFilterType.SKIP:
-            scene.edit('Import maya data', _create_data, set_name, maya_id, new_roots)
+            scene.edit('Import maya data', common._create_data, set_name, maya_id, new_roots)
             if qrig_path:
                 _make_rig_info(scene, set_name, new_roots)
         else:
             scene.info("Updated existing data")
-            
-            
+
+
     _load_textures(scene)
-              
-                
+
+
     #rig generation has to come last, so all the other automation can complete properly
     #This is outside of the main file loop, because for now we can only import one
     #rig file per import actions, so the var should be initialized, and I need  do this after all
@@ -265,9 +241,9 @@ def _import_maya(new_scene, import_filter: fbx.FbxFilterType):
     if import_rig:
         print("attempting rig import")
         _import_maya_qrig_file(import_rig)
-            
-     
-        
+
+
+
 def update_models():
     _import_maya(False, fbx.FbxFilterType.MODEL)
     
@@ -289,138 +265,5 @@ def smart_import(new_scene):
     
     
 def update_textures():
-    scene = cg3dguru.get_current_scene().ds
+    scene = pycsc.get_current_scene().ds
     _load_textures(scene)
-    
-
-    
-
-    
-
-##----Export functions---- 
-    
-    
-def _get_maya_sets(obj_list):
-    return [obj for obj in obj_list if
-            obj.get_behaviour_by_name(MAYA_BEHAVIOUR_NAME) is not None]
-    
-    
-def _select_for_export(scene, new_selection):
-    scene.select(new_selection)
-    #scene.select_frame_range()
-    
-
-#def send_command_to_maya(cmd):
-    #import wingcarrier.pigeons
-    
-    #cmd = f"import cg3dcasc.core; cg3casc.core.clien.port = {}; {cmd}"
-    #maya = wingcarrier.pigeons.MayaPigeon()
-    #maya.command_port = ACTIVE_PORT_ID
-    
-    #if maya.send_python_command(cmd):
-        #return (True, maya.response)
-    #else:
-        #return (False, "")
-
-    
-def get_set_ids():
-    """Return a list of ids in the current scene"""
-    
-    cmd = "cg3dcasc.core.get_set_ids()"
-    successs, data = server.send_to_maya(ACTIVE_PORT_ID, cmd)
-
-
-
-def get_coord_system():
-    """returns the active coordinate system in Maya"""
-    
-    cmd = "cg3dcasc.core.get_coord_system()"
-    success, data = server.send_to_maya(ACTIVE_PORT_ID, cmd)
-
-    
-
-def _export(cmd):
-    new_object = None
-    def _create_new_set(scene):
-        print("Making new set")
-        nonlocal new_object
-        current_roots = scene.get_scene_objects(only_roots=True)
-        set_name = "MAYA_DATA_EXPORT"
-        maya_id = uuid.uuid1()
-        new_object = _create_data(scene, set_name, str(maya_id), current_roots)
-    
-    #remove any previous exports
-    temp_dir = pathlib.Path(os.path.join(tempfile.gettempdir(), 'mayacasc'))
-    print('Cascaduer Export Location {}'.format(temp_dir))
-    if not temp_dir.exists():
-        temp_dir.mkdir()
-
-    #delete previous entries
-    for child in temp_dir.iterdir():
-        child.unlink(missing_ok=True)
-        
-    scene = cg3dguru.get_current_scene().ds
-    
-    #See if we have an export set selected
-    selected = scene.get_scene_objects(selected=True)
-    export_sets = _get_maya_sets(selected)
-    
-    #If not see if we can find any in the current scene
-    if not export_sets:
-        transforms = scene.get_scene_objects(of_type='Basic')
-        export_sets = _get_maya_sets(transforms)
-        if export_sets:
-            print("Found previous import")
-            print(export_sets)
-        
-    #If not, then this must be a first time export, so let's make an export set
-    if not export_sets:
-        scene.edit('Create Maya Export Set', _create_new_set)
-        export_sets =  _get_maya_sets([new_object])
-        
-        
-    for export_set in export_sets:
-        root_beh = export_set.get_behaviour_by_name(MAYA_ROOTS)
-        roots = [beh.object for beh in root_beh.behaviours.get()]
-        
-        new_selection = []
-        for root in roots:
-            new_selection.extend(common.hierarchy.get_object_branch_inclusive(root, root.scene))
-            
-        scene.edit('Change selection', _select_for_export, new_selection)
-
-        maya_beh =root_beh.get_siblings_by_name(MAYA_BEHAVIOUR_NAME)[0]
-        maya_id = maya_beh.datasWithSameNamesReadonly.get_by_name('maya_id')
-        if maya_id:
-            maya_id = maya_id[0]
-            fbx_name = '{}.{}.fbx'.format(root_beh.object.name, maya_id.get())
-            
-            export_path = str(temp_dir.joinpath(fbx_name))
-            
-            print("Exporting to {}".format(fbx_name))
-            
-            #TODO: Change this to selection, once we know how to select a branch
-            fbx.export_fbx(export_path, fbx.FbxFilterType.SELECTED) 
-        
-
-    success, data = server.send_to_maya(ACTIVE_PORT_ID, cmd)
-    #import wingcarrier.pigeons
-    #maya = wingcarrier.pigeons.MayaPigeon()
-    #maya.command_port = ACTIVE_PORT_ID
-    #maya.send_python_command(cmd_string)
-    
-    ##something isn't working here
-    #scene.edit('Reset selection', lambda x: scene.select(list(selected)))
- 
-        
-        
-def export_maya_animation():
-    cmd = "cg3dcasc.core.import_fbx()"
-    _export(cmd)
-    
-    
-def run(*args, **kwargs):
-    export_maya_animation()
-    
-
-

@@ -4,7 +4,7 @@ import struct
 
 HOST = '127.0.0.1'
 PORT = 0 #this makes the port dynamic
-TIMEOUT_SECONDS = 0.5
+TIMEOUT_SECONDS = 0.2
 
 def receive_all(sock, n):
     """Helper function to ensure all 'n' bytes are received."""
