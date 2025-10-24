@@ -1,9 +1,6 @@
 
 
-#PARAMS = {
-    #'label': 'Quick Export'
-#}
-
+DIVIDER = ''
 
 
 def postMenuCommand(*args, **kwargs):
@@ -12,4 +9,4 @@ def postMenuCommand(*args, **kwargs):
 
 def command(*args, **kwargs):
     import cg3dcasc
-    cg3dcasc.connect()
+    cg3dcasc.server.send_to_casc("cg3dmaya.report_port_number()")

@@ -18,7 +18,7 @@ except:
 
 
 import cg3dguru.ui
-from . import exchange
+from . import common
 from .udata import *
 
 CLONE_PREFIX = 'CASC'
@@ -348,7 +348,7 @@ def _copy_per_vert(skin_proxy, skin_cluster_node, clone_pairing, originals, repl
 
 
 def _clone_meshes(meshes, mesh_parent, skinned_parent, clone_pairing):
-    mesh_cluster_mapping = exchange.get_mesh_cluster_mappings()
+    mesh_cluster_mapping = common.get_mesh_cluster_mappings()
 
     copy_method = preferences.CopyWeightType.SWAP
     print(f"Cloning weights via {copy_method} method.")
@@ -458,7 +458,7 @@ def convert_textures():
 
     roots = {item.getParent(-1) for item in pm.ls(sl=True)}
     branches = pm.listRelatives(list(roots), allDescendents=True)
-    textures = exchange.get_textures(branches)
+    textures = common.get_textures(branches)
     
     valid_extensions = {'jpg', 'jpeg', 'png'}
     for key, textures in textures.items():
@@ -484,8 +484,8 @@ def _derig_selection():
 
     start_progress_bar(status='Creating Proxy', maxValue=100)
 
-    results = exchange.get_skinned_data_sets(selection)
-    exchange.update_skinned_data_sets(*results)
+    results = common.get_skinned_data_sets(selection)
+    common.update_skinned_data_sets(*results)
     joints, meshes, skin_clusters, transforms = results
     
     if not joints and not meshes and not skin_clusters:
@@ -549,7 +549,7 @@ def constrain_proxy():
     
     elif len(joint_roots) > 2:
         #We have multiple proxies in the scene, so we need to do some extra work to find the right proxy
-        export_nodes = exchange.get_export_nodes()
+        export_nodes = common.get_export_nodes()
         pm.warning("add support for finding one of many proxy rigs")
 
     else:

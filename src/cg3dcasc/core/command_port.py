@@ -3,12 +3,16 @@ import maya.cmds as cmds
 port_number = None
 
 def open():
-    """
-    Finds the first available port in a given range.
-    
-    Returns the port number if found, otherwise None.
-    """
+    """Attempt to open a port if one's not already opened"""
     global port_number
+    
+    if port_number is not None:
+        if cmds.commandPort(f':{port_number}', q=True):
+            return True
+        else:
+            port_number = None
+
+    #We must not have an open port, so let's open one.
     start_port = 6000
     end_port = start_port + 50
 
@@ -26,5 +30,5 @@ def open():
         print("Cascadeur Bridge opened Command Port:{0}".format(port_number))
         return True
     else:
-        print('couldnt open command port')
+        print("Couldn't open command port")
         return False

@@ -3,6 +3,7 @@ import socket
 import json
 import struct
 import pymel.core as pm
+from . import command_port
 
 HOST = '127.0.0.1'
 PORT = 0 #this makes the port dynamic
@@ -53,16 +54,29 @@ def handle_client(conn, addr):
     return (success, data)
 
 
-def send_to_casc(cmd, path_from_registry=True):
+def connect():
+    if command_port.port_number is None:
+        if not command_port.open():
+            pm.error("Couldn't open command port. Import failed.")
+            return False
+
+    return True
+
+
+def send_to_casc(cmd):
     import wingcarrier.pigeons
+
+    #TODO: Add UI to make this a user preference.
+    path_from_registry = False
     
-    cmd = f"import cg3dmaya; {cmd}" #cg3dmaya.set_active_port({command_port.port_number})"
-    casc = wingcarrier.pigeons.CascadeurPigeon()
-    casc.path_from_registry = path_from_registry
-    try:
-        casc.send_python_command(cmd)
-    except ProcessLookupError:
-        pm.error("Please make sure Cascadeur is running and try again.")    
+    if connect():
+        cmd = f"import cg3dmaya; cg3dmaya.set_active_port({command_port.port_number}); {cmd}"
+        casc = wingcarrier.pigeons.CascadeurPigeon()
+        casc.path_from_registry = path_from_registry
+        try:
+            casc.send_python_command(cmd)
+        except ProcessLookupError:
+            pm.error("Please make sure Cascadeur is running and try again.")
 
         
 def send_and_listen(cmd):
@@ -88,7 +102,5 @@ def send_and_listen(cmd):
             pm.warning(f"No connection received within {TIMEOUT_SECONDS} seconds. Shutting down.")
         except Exception as e:
             pm.error(f"An unexpected error occurred: {e}")
-
-
 
     return (success, data)

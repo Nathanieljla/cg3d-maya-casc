@@ -57,7 +57,7 @@ def import_fbx(file_path: str, import_filter: FbxFilterType, new_scene: bool = F
     else:
         raise ValueError("Invalid import_filter value: {}".format(import_filter))
         
-    method(file_path)
+    return method(file_path)
     
 
 def export_fbx(file_path: str, export_filter: FbxFilterType, settings: csc.fbx.FbxSettings = None):

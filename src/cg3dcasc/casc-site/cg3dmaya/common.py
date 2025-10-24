@@ -102,7 +102,10 @@ def get_coord_system():
      
 def set_active_port(port_number):
     global _active_port_number
-    
     _active_port_number = int(port_number)
+
+
+def report_port_number():
+    global _active_port_number
     scene = pycsc.get_current_scene().ds
-    scene.success(f"Connected to :{_active_port_number}")
+    scene.success(f"Connected to :{_active_port_number}")    

@@ -135,18 +135,24 @@ def _load_textures(scene):
                 container = obj.TextureContainer
                 textures = container.texture_paths.get()
                 for texture in textures:
-                    d_id = texture.id #crash point
                     container.texture_paths.remove(texture)
-                    container.de.delete_data(d_id)
+                    
+                    if hasattr(texture, 'id'):
+                        container.de.delete_data(texture.id)
+                    else:
+                        try:
+                            container.de.delete_data(texture)
+                        except:
+                            print("Couldn't delete {texture} when updating textures")
 
+                #scene.su.generate_update()
                 for idx, filename in enumerate(filenames):
                     data_name = f"texture {idx}"
                     container.texture_paths.create_data(data_name, csc.model.DataMode.Static, filename, group_name='maya_textures')
 
 
                 obj.MeshObject.textures.set(obj.TextureContainer)
-
-    #mod(scene)               
+              
     scene.edit("Load Textures", mod)
 
 
@@ -199,7 +205,7 @@ def _import_maya(new_scene, import_filter: fbx.FbxFilterType):
         modified_filter = _get_modified_filter(existing_data, qrig_path, import_filter)
 
         if modified_filter != fbx.FbxFilterType.SKIP:
-            #To-Do: Find a way to make this update the mesh for exsting data
+            #To-Do: Find a way to make this update the mesh for existing data
             #
             #if existing_data and modified_filter == fbx.FbxFilterType.MODEL:
                 ##selecting the existing data before importing a model should
@@ -243,7 +249,6 @@ def _import_maya(new_scene, import_filter: fbx.FbxFilterType):
         _import_maya_qrig_file(import_rig)
 
 
-
 def update_models():
     _import_maya(False, fbx.FbxFilterType.MODEL)
     
@@ -260,8 +265,8 @@ def import_scene(new_scene):
     _import_maya(new_scene, fbx.FbxFilterType.SCENE)
     
     
-def smart_import(new_scene):
-    _import_maya(new_scene, fbx.FbxFilterType.AUTO)
+def smart_import():
+    _import_maya(False, fbx.FbxFilterType.AUTO)
     
     
 def update_textures():

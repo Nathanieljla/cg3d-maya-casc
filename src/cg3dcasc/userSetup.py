@@ -5,9 +5,7 @@ def casc_setup():
     try:
         import cg3dcasc
         import cg3dcasc.core
-        
-        cg3dcasc.command_port.open()
-        
+           
         print("Cascadeur: building Menu!")
         from cg3dguru.utils import menu_maker
         menu_maker.run(menu_namespace='cg3dcasc.menu')
@@ -28,7 +26,6 @@ def casc_setup():
         
         with open(log, 'w') as f:
             f.write(callstack)
-
 
 
 maya.utils.executeDeferred(casc_setup)

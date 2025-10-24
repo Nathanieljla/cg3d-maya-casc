@@ -7,8 +7,8 @@ ORDER = [
     'quick_export',
     'update',
     'add_to',
+    'connect',
     'import',
-    'connect', 
     'editor',
     'utils',
     'preferences'

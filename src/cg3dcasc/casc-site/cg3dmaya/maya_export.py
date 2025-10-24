@@ -119,9 +119,9 @@ def export_maya_animation():
     _export(cmd)
     
 
-def smart_export(port_number):
-    common.set_active_port(port_number)
-    export_maya_animation()
+#def smart_export(port_number):
+    #common.set_active_port(port_number)
+    #export_maya_animation()
     
 
 def run(*args, **kwargs):
