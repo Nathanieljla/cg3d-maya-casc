@@ -30,7 +30,7 @@ def _import_maya_qrig_file(file_path):
     rig_tool = csc.app.get_application().get_tools_manager().get_tool('RiggingToolWindowTool').editor(application_scene)
     rig_tool.open_quick_rigging_tool()
     rig_tool.load_template_by_fileName(file_path)
-    #rig_tool.generate_rig_elements()
+    rig_tool.generate_rig_elements()
     
     
 def _get_object_by_id(object_list, maya_id):

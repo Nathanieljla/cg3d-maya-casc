@@ -16,53 +16,14 @@ from . import server
 from . import fbx
 
 
-
 def _get_maya_sets(obj_list):
     return [obj for obj in obj_list if
             obj.get_behaviour_by_name(common.MAYA_BEHAVIOUR_NAME) is not None]
 
-    #export_sets = []
-    #for obj in obj_list:
-        #if obj.get_behaviour_by_name(MAYA_BEHAVIOUR_NAME) is not None:
-            #export_sets.append(obj)
-            
-    #return export_sets
-    
+
 def _select_for_export(scene, new_selection):
     scene.select(new_selection)
-    #scene.select_frame_range()
 
-
-    
-def get_set_ids():
-    """Return a list of ids in the current scene"""
-    
-    cmd = "cg3dcasc.core.get_set_ids()"
-    success, data = server.send_to_maya(common.ACTIVE_PORT_ID, cmd)
-    if not success:
-        return None
-
-    return data
-
-
-def get_coord_system():
-    """returns the active coordinate system in Maya"""
-    
-    cmd = "cg3dcasc.core.get_coord_system()"
-    success, data = server.send_to_maya(common.ACTIVE_PORT_ID, cmd)
-    if not success:
-        return None
-
-    match data.lower():
-        case 'x':
-            return csc.fbx.FbxSettingsAxis.X
-        case 'y':
-            return csc.fbx.FbxSettingsAxis.Y
-        case 'z':
-            return csc.fbx.FbxSettingsAxis.Z
-        case _:
-            return None
-    
 
 def _export(cmd):
     new_object = None
@@ -112,9 +73,9 @@ def _export(cmd):
         export_sets =  _get_maya_sets([new_object])
         
 
-    up_axis = get_coord_system()
+    up_axis = common.get_coord_system()
     if up_axis is None:
-        scene.error("Couldn't get Maya's Up Axis. Is Maya Running? Export Failed")
+        print("Couldn't get Maya's Up Axis. Is Maya Running? Export Failed")
         return
         
     for export_set in export_sets:
@@ -150,13 +111,18 @@ def _export(cmd):
             fbx.export_fbx(export_path, fbx.FbxFilterType.SELECTED) 
         
 
-    success, data = server.send_to_maya(common.ACTIVE_PORT_ID, cmd)
+    server.send_to_maya(common._active_port_number, cmd)
 
 
 def export_maya_animation():
     cmd = "cg3dcasc.core.import_fbx()"
     _export(cmd)
     
+
+def smart_export(port_number):
+    common.set_active_port(port_number)
+    export_maya_animation()
     
+
 def run(*args, **kwargs):
     export_maya_animation()

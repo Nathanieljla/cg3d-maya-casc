@@ -1,39 +1,40 @@
 
-#import json
-#import tempfile
-#import os
-##import typing
+import json
+import tempfile
+import os
+#import typing
 
-##import winreg
-##import psutil
-#import pathlib
+#import winreg
+#import psutil
+import pathlib
 
-#from maya import OpenMayaUI as omui 
+#from maya import OpenMayaUI as omui
 
 
-##try:
-    ###from PySide2.QtWidgets import *
-    ###from PySide2.QtGui import *
-    ##from shiboken2 import wrapInstance
-##except:
-    ###from PySide6.QtWidgets import *
-    ###from PySide6.QtGui import *
-    ##from shiboken6 import wrapInstance
+#try:
+    ##from PySide2.QtWidgets import *
+    ##from PySide2.QtGui import *
+    #from shiboken2 import wrapInstance
+#except:
+    ##from PySide6.QtWidgets import *
+    ##from PySide6.QtGui import *
+    #from shiboken6 import wrapInstance
     
 
-#import pymel.core as pm
-#from . import hik
-#from .udata import *
-##from .common import * 
-#from cg3dcasc import preferences
+import pymel.core as pm
+from . import hik
+from .udata import *
+#from .common import * 
+from cg3dcasc import preferences
 
-#import wingcarrier.pigeons
-#import cg3dguru.udata
-#import cg3dguru.animation.fbx
-#import cg3dguru.utils
-#from . import client
-#from . import command_port
-#from . import server
+import wingcarrier.pigeons
+import cg3dguru.udata
+import cg3dguru.animation.fbx
+import cg3dguru.utils
+from . import client
+from . import command_port
+from . import server
+from . import common
 
 
 #class SpineException(Exception):
@@ -1116,7 +1117,7 @@
         #texture_file.close()
 
     #if cmd:
-        #server.send_to_maya(cmd)
+        #server.send_to_casc(cmd)
         ##casc = wingcarrier.pigeons.CascadeurPigeon()
         ##casc.send_python_command(cmd)
         
@@ -1151,87 +1152,88 @@
     #export(cmd=cmd)
     
     
-#def smart_import():
-    #if command_port.port_number is None:
-        #command_port.open()
-        #if command_port.port_number is None:
-            #pm.error("Couldn't open command port. Import failed.")
-            #return
+def import_from_casc():
+    if command_port.port_number is None:
+        command_port.open()
+        if command_port.port_number is None:
+            pm.error("Couldn't open command port. Import failed.")
+            return
     
-    #cmd = f"cg3dmaya.smart_export({command_port.port_number})"
-    #server.send_to_maya(cmd)
-    ##casc = wingcarrier.pigeons.CascadeurPigeon()
-    ##casc.send_python_command(cmd)    
+    cmd = f"cg3dmaya.smart_export({command_port.port_number})"
+    server.send_to_casc(cmd)
+    #casc = wingcarrier.pigeons.CascadeurPigeon()
+    #casc.send_python_command(cmd)    
 
 
-#def get_import_files():
-    #files = {}
+def get_import_files():
+    files = {}
 
-    #temp_dir = pathlib.Path(os.path.join(tempfile.gettempdir(), 'mayacasc'))
-    #if not temp_dir.exists():
-        #pm.error("Can't find Maya data")
-        #return files
+    temp_dir = pathlib.Path(os.path.join(tempfile.gettempdir(), 'mayacasc'))
+    if not temp_dir.exists():
+        pm.error("Can't find Maya data")
+        return files
 
-    #for child in temp_dir.iterdir():
-        #name, ext = child.name.rsplit('.', 1)
-        #if name not in files:
-            #files[name] = dict()
+    for child in temp_dir.iterdir():
+        name, ext = child.name.rsplit('.', 1)
+        if name not in files:
+            files[name] = dict()
             
-        #files[name][ext.lower()] = str(child)
+        files[name][ext.lower()] = str(child)
         
         
-    #return files
+    return files
 
 
-#def import_fbx():
-    #files = get_import_files()
+def import_fbx():
+    files = get_import_files()
+    print(f"Importing:{files}")
     
-    #scene_sets = pm.ls(type='objectSet')
-    #existing_exports = cg3dguru.udata.Utils.get_nodes_with_data(scene_sets, data_class=CascExportData)
-    #scene_roots = set(pm.ls(assemblies=True))
+    scene_sets = pm.ls(type='objectSet')
+    existing_exports = cg3dguru.udata.Utils.get_nodes_with_data(scene_sets, data_class=CascExportData)
+    scene_roots = set(pm.ls(assemblies=True))
 
-    #for key, item in files.items():
-        #fbx_path = item.get('fbx', '')
-        #qrig_path = item.get('qrigcasc', '')    
+    for key, item in files.items():
+        fbx_path = item.get('fbx', '')
+        qrig_path = item.get('qrigcasc', '')    
 
-        #set_name, maya_id = key.split('.')
-        #if fbx_path:
-            #matching_id_node = None
-            #for node in existing_exports:
-                #if node.cscDataId.get() == maya_id:
-                    #matching_id_node = node
-                    #break            
+        set_name, maya_id = key.split('.')
+        if fbx_path:
+            matching_id_node = None
+            for node in existing_exports:
+                if node.cscDataId.get() == maya_id:
+                    matching_id_node = node
+                    break            
             
-            ##switch any hik character to None, so we can see the animation
-            #character_node = None
-            #if matching_id_node:
-                #character_node = get_character_node(matching_id_node.cscDataId)
-            #if character_node:
-                #hik.set_character_source(character_node, hik.SourceType.NONE)
+            #switch any hik character to None, so we can see the animation
+            character_node = None
+            if matching_id_node:
+                character_node = common.get_character_node(matching_id_node.cscDataId)
+            if character_node:
+                hik.set_character_source(character_node, hik.SourceType.NONE)
             
-            ##Import the FBX data
-            #print('importing {}'.format(fbx_path))
-            #cg3dguru.animation.fbx.import_fbx(fbx_path)
-            #current_roots = set(pm.ls(assemblies=True))
+            #Import the FBX data
+            print('importing {}'.format(fbx_path))
+            cg3dguru.animation.fbx.import_fbx(fbx_path)
+            current_roots = set(pm.ls(assemblies=True))
 
-            ##should we always update with the latest roots?
-            #new_roots = current_roots.difference(scene_roots)
-            #scene_roots = current_roots
+            #should we always update with the latest roots?
+            new_roots = current_roots.difference(scene_roots)
+            scene_roots = current_roots
             
-            #if matching_id_node is None:
-                #print("Adding new casc objects: {}".format(new_roots))
-                #new_node, data = CascExportData.create_node(nodeType='objectSet')
-                #pm.rename(new_node, set_name)
-                #if new_roots:
-                    #new_node.addMembers(new_roots)
+            if matching_id_node is None:
+                print("Adding new casc objects: {}".format(new_roots))
+                new_node, data = CascExportData.create_node(nodeType='objectSet')
+                pm.rename(new_node, set_name)
+                if new_roots:
+                    new_node.addMembers(new_roots)
 
-                #data.cscDataId.unlock()
-                #data.cscDataId.set(maya_id)
-                #data.cscDataId.lock()                
+                data.cscDataId.unlock()
+                data.cscDataId.set(maya_id)
+                data.cscDataId.lock()                
                 
                 
-        #if qrig_path:
-            #print("Can't import rigs at the moment")
+        if qrig_path:
+            print("Can't import rigs at the moment")
 
 
 #def get_set_ids():
@@ -1260,15 +1262,15 @@
     
     #cmd = f"cg3dmaya.set_active_port({command_port.port_number})"
     #server.send_to_maya(cmd)
-    ##casc = wingcarrier.pigeons.CascadeurPigeon()
-    ##try:
-        ##casc.send_python_command(cmd)
-    ##except ProcessLookupError:
-        ##pm.error("Please make sure Cascadeur is running and try again.")
+    #casc = wingcarrier.pigeons.CascadeurPigeon()
+    #try:
+        #casc.send_python_command(cmd)
+    #except ProcessLookupError:
+        #pm.error("Please make sure Cascadeur is running and try again.")
 
             
-#def run():
-    #pass
-    ##get_textures(pm.ls(sl=True))
-    ##import_fbx()
+def run():
+    pass
+    #get_textures(pm.ls(sl=True))
+    #import_fbx()
     

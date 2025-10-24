@@ -1,28 +1,27 @@
 
 
-import maya.cmds as cmds
+#import maya.cmds as cmds
 import socket
 import json
 import struct
 
 
 HOST = '127.0.0.1'
-_casc_port = 7258 #dynamically changed by the cg3dmaya.server.send_to_maya
-
+_maya_port = 7258 #dynamically changed
 
 
 def set_port(number):
     print(f"new port number = {number}{number.__class__}")
-    global _casc_port
-    _casc_port = number
+    global _maya_port
+    _maya_port = number
 
 
-def data_to_casc(data):
+def data_to_maya(scene: 'pycsc.dataTypes.DomainScene', data):
     """Encodes and sends JSON data to the external server."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client:
         try:
-            print(f"cascadeur port:{_casc_port}")
-            client.connect((HOST, _casc_port))
+            print(f"cascadeur port:{_maya_port}")
+            client.connect((HOST, _maya_port))
             
             json_string = json.dumps(data)
             json_bytes = json_string.encode('utf-8')
@@ -36,6 +35,6 @@ def data_to_casc(data):
             print(f"Sent {len(json_bytes)} bytes of JSON data to the server. Data is:{data}")
         
         except ConnectionRefusedError:
-            cmds.warning(f"Failed to connect to server at {HOST}:{_casc_port}. Is the server running?")
+            scene.warning(f"Failed to connect to server at {HOST}:{_maya_port}. Is the server running?")
         except Exception as e:
-            cmds.warning(f"An error occurred: {e}")
+            scene.error(f"An error occurred: {e}")

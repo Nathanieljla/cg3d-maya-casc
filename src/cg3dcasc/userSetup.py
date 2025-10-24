@@ -3,8 +3,6 @@ import maya.utils
 
 def casc_setup():
     try:
-
-        
         import cg3dcasc
         import cg3dcasc.core
         

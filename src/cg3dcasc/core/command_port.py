@@ -8,7 +8,7 @@ def open():
     
     Returns the port number if found, otherwise None.
     """
-    global command_port
+    global port_number
     start_port = 6000
     end_port = start_port + 50
 

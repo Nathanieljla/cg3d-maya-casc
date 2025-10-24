@@ -15,12 +15,10 @@ import csc
 #import rig_mode.on as rm_on
 #import rig_mode.off as rm_off
 
-#from . import server
-
+from . import server
+import pycsc
 #import pycsc as cg3dguru
 #import pycsc.general.fbx as fbx
-
-
 
 
 MAYA_BEHAVIOUR_NAME = 'Maya Data'
@@ -28,7 +26,16 @@ MAYA_ROOTS = 'Maya Roots'
 BAKE_ANIMATION = 'Bake Animation'
 
 
-ACTIVE_PORT_ID = 6000
+_active_port_number = None
+
+
+def get_active_port():
+    if _active_port_number is None:
+        scene = pycsc.get_current_scene().ds
+        scene.error("Maya not connected")
+        return -1
+
+    return _active_port_number
 
         
 def _add_export_settings(behaviour):
@@ -62,4 +69,40 @@ def _create_data(scene, set_name, maya_id, new_roots):
     
     return obj
 
+
+def get_set_ids():
+    """Return a list of ids in the current scene"""
+    
+    cmd = "cg3dcasc.core.get_set_ids()"
+    success, data = server.send_and_listen(get_active_port(), cmd)
+    if not success:
+        return None
+
+    return data
+
+
+def get_coord_system():
+    """returns the active coordinate system in Maya"""
+    
+    cmd = "cg3dcasc.core.get_coord_system()"
+    success, data = server.send_and_listen(get_active_port(), cmd)
+    if not success:
+        return None
+
+    match data.lower():
+        case 'x':
+            return csc.fbx.FbxSettingsAxis.X
+        case 'y':
+            return csc.fbx.FbxSettingsAxis.Y
+        case 'z':
+            return csc.fbx.FbxSettingsAxis.Z
+        case _:
+            return None
+
      
+def set_active_port(port_number):
+    global _active_port_number
+    
+    _active_port_number = int(port_number)
+    scene = pycsc.get_current_scene().ds
+    scene.success(f"Connected to :{_active_port_number}")

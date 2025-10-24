@@ -1,39 +1,39 @@
 
-#import json
-#import tempfile
-#import os
-##import typing
+import json
+import tempfile
+import os
+#import typing
 
-##import winreg
-##import psutil
-#import pathlib
+#import winreg
+#import psutil
+import pathlib
 
-#from maya import OpenMayaUI as omui 
+from maya import OpenMayaUI as omui 
 
 
-##try:
-    ###from PySide2.QtWidgets import *
-    ###from PySide2.QtGui import *
-    ##from shiboken2 import wrapInstance
-##except:
-    ###from PySide6.QtWidgets import *
-    ###from PySide6.QtGui import *
-    ##from shiboken6 import wrapInstance
+#try:
+    ##from PySide2.QtWidgets import *
+    ##from PySide2.QtGui import *
+    #from shiboken2 import wrapInstance
+#except:
+    ##from PySide6.QtWidgets import *
+    ##from PySide6.QtGui import *
+    #from shiboken6 import wrapInstance
     
 
-#import pymel.core as pm
-#from . import hik
-#from .udata import *
-##from .common import * 
-#from cg3dcasc import preferences
+import pymel.core as pm
+from . import hik
+from .udata import *
+#from .common import * 
+from cg3dcasc import preferences
 
-#import wingcarrier.pigeons
-#import cg3dguru.udata
-#import cg3dguru.animation.fbx
-#import cg3dguru.utils
-#from . import client
-#from . import command_port
-#from . import server
+import wingcarrier.pigeons
+import cg3dguru.udata
+import cg3dguru.animation.fbx
+import cg3dguru.utils
+from . import client
+from . import command_port
+from . import server
 
 
 #class SpineException(Exception):
@@ -841,19 +841,19 @@
 
 
 
-#def get_character_node(export_data):
-    #"""Return any HIK character node associated with the export_data"""
+def get_character_node(export_data):
+    """Return any HIK character node associated with the export_data"""
     
-    #qrig_data = QRigData.get_data(export_data.node())
-    #character_node = None
-    #if qrig_data:
-        #inputs = qrig_data.characterNode.inputs()
-        #if not qrig_data.characterNode.inputs():
-            #pm.error("ERROR: cascadeur.core.export: qrig_data wasn't provided with HIK Character node")
-        #else:
-            #character_node = inputs[0]
+    qrig_data = QRigData.get_data(export_data.node())
+    character_node = None
+    if qrig_data:
+        inputs = qrig_data.characterNode.inputs()
+        if not qrig_data.characterNode.inputs():
+            pm.error("ERROR: cascadeur.core.export: qrig_data wasn't provided with HIK Character node")
+        else:
+            character_node = inputs[0]
             
-    #return character_node
+    return character_node
 
 
 
@@ -1234,41 +1234,41 @@
             #print("Can't import rigs at the moment")
 
 
-#def get_set_ids():
-    #data = []
-    #scene_sets = pm.ls(type='objectSet')
-    #export_sets = cg3dguru.udata.Utils.get_nodes_with_data(scene_sets, data_class=CascExportData)
+def get_set_ids():
+    data = []
+    scene_sets = pm.ls(type='objectSet')
+    export_sets = cg3dguru.udata.Utils.get_nodes_with_data(scene_sets, data_class=CascExportData)
 
-    #for export_set in export_sets:
-        #print(export_set)
-        #data = ["1", 2]
+    for export_set in export_sets:
+        print(export_set)
+        data = ["1", 2]
         
-    #client.data_to_casc(data)
+    client.data_to_casc(data)
  
 
-#def get_coord_system():
-    #data = pm.cmds.upAxis(q=True, axis=True)
-    #client.data_to_casc(data)
+def get_coord_system():
+    data = pm.cmds.upAxis(q=True, axis=True)
+    client.data_to_casc(data)
     
     
-#def connect():
-    #if command_port.port_number is None:
-        #command_port.open()
-        #if command_port.port_number is None:
-            #pm.error("Couldn't open command port. Import failed.")
-            #return
+def connect():
+    if command_port.port_number is None:
+        command_port.open()
+        if command_port.port_number is None:
+            pm.error("Couldn't open command port. Import failed.")
+            return
     
-    #cmd = f"cg3dmaya.set_active_port({command_port.port_number})"
-    #server.send_to_maya(cmd)
-    ##casc = wingcarrier.pigeons.CascadeurPigeon()
-    ##try:
-        ##casc.send_python_command(cmd)
-    ##except ProcessLookupError:
-        ##pm.error("Please make sure Cascadeur is running and try again.")
+    cmd = f"cg3dmaya.set_active_port({command_port.port_number})"
+    server.send_to_casc(cmd)
+    #casc = wingcarrier.pigeons.CascadeurPigeon()
+    #try:
+        #casc.send_python_command(cmd)
+    #except ProcessLookupError:
+        #pm.error("Please make sure Cascadeur is running and try again.")
 
             
-#def run():
-    #pass
-    ##get_textures(pm.ls(sl=True))
-    ##import_fbx()
+def run():
+    pass
+    #get_textures(pm.ls(sl=True))
+    #import_fbx()
     
