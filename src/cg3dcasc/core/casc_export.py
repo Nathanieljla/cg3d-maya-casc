@@ -3,6 +3,7 @@ import json
 import tempfile
 import os
 import pathlib
+import time
 
 import pymel.core as pm
 from . import hik
@@ -80,6 +81,7 @@ def get_exportable_content(export_data):
     common.update_skinned_data_sets(joints, meshes, skin_clusters, transforms)
 
     return (joints, meshes, skin_clusters, transforms)
+
     
 
 def _export_data(export_data, export_folder: pathlib.Path, export_rig: bool, export_fbx: bool):    
@@ -233,8 +235,15 @@ def get_textures(objs, export_nodes=[]):
     return materials
 
 
+def cascadeur_available():
+    start_time = time.time()
+    result = wingcarrier.pigeons.CascadeurPigeon().can_dispatch()
+    print(f"Time to check Dispatch: {time.time() - start_time}")
+    return result
+
+
 def export(export_set=None, export_rig=False, cmd='', textures=True, only_textures=False):
-    if cmd and not wingcarrier.pigeons.CascadeurPigeon().can_dispatch():
+    if cmd and not cascadeur_available():
         pm.confirmDialog(message="Please launch Cascadeur, then try again.",button=['Okay'])
         return False
     

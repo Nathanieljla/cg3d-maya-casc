@@ -5,6 +5,8 @@ import struct
 import pymel.core as pm
 from . import command_port
 
+from cg3dcasc import preferences
+
 HOST = '127.0.0.1'
 PORT = 0 #this makes the port dynamic
 TIMEOUT_SECONDS = 0.2
@@ -57,13 +59,10 @@ def handle_client(conn, addr):
 def send_to_casc(cmd):
     import wingcarrier.pigeons
 
-    #TODO: Add UI to make this a user preference.
-    path_from_registry = False
-    
     if command_port.open():
         cmd = f"import cg3dmaya; cg3dmaya.set_active_port({command_port.port_number}); {cmd}"
         casc = wingcarrier.pigeons.CascadeurPigeon()
-        casc.path_from_registry = path_from_registry
+        casc.connect_from_registry = preferences.get().connect_from_registry
         try:
             casc.send_python_command(cmd)
         except ProcessLookupError:

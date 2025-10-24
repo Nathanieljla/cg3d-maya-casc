@@ -38,7 +38,7 @@ class _PreferenceData(object):
         self.texture_conversion = TextureConversionType.NEVER
         self.derig_reset_joint_scale = True
         self.derig_maintain_offset = True
-        self.path_from_registry = True
+        self.connect_from_registry = True
         
         if old_prefs is not None:
             try:
@@ -52,7 +52,7 @@ class _PreferenceData(object):
         new.texture_conversion = getattr(old, 'texture_conversion') if hasattr(old, 'texture_conversion') else new.texture_conversion
         new.derig_reset_joint_scale = getattr(old, 'derig_reset_joint_scale') if hasattr(old, 'derig_reset_joint_scale') else new.derig_reset_joint_scale
         new.derig_maintain_offset = getattr(old, 'derig_maintain_offset') if hasattr(old, 'derig_maintain_offset') else new.derig_maintain_offset
-        new.path_from_registry = getattr(old, 'path_from_registry') if hasattr(old, 'path_from_registry') else new.path_from_registry
+        new.connect_from_registry = getattr(old, 'connect_from_registry') if hasattr(old, 'connect_from_registry') else new.connect_from_registry
         
         
 def _get_save_path():
