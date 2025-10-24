@@ -7,8 +7,7 @@ import struct
 
 
 HOST = '127.0.0.1'
-_casc_port = 7258 #dynamically changed by the cg3dmaya.server.send_to_maya
-
+_casc_port = 0 #dynamically changed by the cg3dmaya.server.send_to_maya
 
 
 def set_port(number):

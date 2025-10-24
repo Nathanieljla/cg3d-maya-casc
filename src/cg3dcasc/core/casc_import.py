@@ -22,18 +22,9 @@ from . import common
 
 
 def import_from_casc():
-    cmd = f"cg3dmaya.export_maya_animation()" #({command_port.port_number})"
+    cmd = f"cg3dmaya.export_maya_animation()"
     server.send_to_casc(cmd)
     
-    #if command_port.port_number is None:
-        #command_port.open()
-        #if command_port.port_number is None:
-            #pm.error("Couldn't open command port. Import failed.")
-            #return
-
-    #cmd = f"cg3dmaya.smart_export({command_port.port_number})"
-    #server.send_to_casc(cmd) 
-
 
 def get_import_files():
     files = {}

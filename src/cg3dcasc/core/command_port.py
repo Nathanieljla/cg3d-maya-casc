@@ -32,3 +32,4 @@ def open():
     else:
         print("Couldn't open command port")
         return False
+    

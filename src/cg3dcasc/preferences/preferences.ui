@@ -66,6 +66,16 @@
          </item>
         </widget>
        </item>
+       <item row="1" column="2">
+        <widget class="QCheckBox" name="checkBox">
+         <property name="layoutDirection">
+          <enum>Qt::RightToLeft</enum>
+         </property>
+         <property name="text">
+          <string>Connect from Registry</string>
+         </property>
+        </widget>
+       </item>
       </layout>
      </widget>
     </item>

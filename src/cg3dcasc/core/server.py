@@ -54,22 +54,13 @@ def handle_client(conn, addr):
     return (success, data)
 
 
-def connect():
-    if command_port.port_number is None:
-        if not command_port.open():
-            pm.error("Couldn't open command port. Import failed.")
-            return False
-
-    return True
-
-
 def send_to_casc(cmd):
     import wingcarrier.pigeons
 
     #TODO: Add UI to make this a user preference.
     path_from_registry = False
     
-    if connect():
+    if command_port.open():
         cmd = f"import cg3dmaya; cg3dmaya.set_active_port({command_port.port_number}); {cmd}"
         casc = wingcarrier.pigeons.CascadeurPigeon()
         casc.path_from_registry = path_from_registry
