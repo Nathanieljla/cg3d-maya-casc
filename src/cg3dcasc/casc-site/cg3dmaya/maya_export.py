@@ -16,64 +16,30 @@ from . import server
 from . import fbx
 
 
-def _get_maya_sets(obj_list):
-    return [obj for obj in obj_list if
-            obj.get_behaviour_by_name(common.MAYA_BEHAVIOUR_NAME) is not None]
+temp_dir = pathlib.Path(os.path.join(tempfile.gettempdir(), 'mayacasc'))
 
 
 def _select_for_export(scene, new_selection):
     scene.select(new_selection)
-
-
-def _export(cmd):
-    new_object = None
-    def _create_new_set(scene):
-        print("Making new set")
-        nonlocal new_object
-        current_roots = scene.get_scene_objects(only_roots=True)
-        set_name = "MAYA_DATA_EXPORT"
-        maya_id = uuid.uuid1()
-        new_object = common._create_data(scene, set_name, str(maya_id), current_roots)
     
-    #remove any previous exports
-    temp_dir = pathlib.Path(os.path.join(tempfile.gettempdir(), 'mayacasc'))
+    
+def _clean_export_location():
     print('Cascaduer Export Location {}'.format(temp_dir))
     if not temp_dir.exists():
         temp_dir.mkdir()
 
     #delete previous entries
     for child in temp_dir.iterdir():
-        child.unlink(missing_ok=True)
-        
-    scene = pycsc.get_current_scene().ds
+        child.unlink(missing_ok=True)    
+
+
+def _export(scene, export_sets):
     
-    #See if we have an export set selected
-    selected = scene.get_scene_objects(selected=True)
-    export_sets = _get_maya_sets(selected)
-    
-    #If not see if we can find any in the current scene
     if not export_sets:
-        transforms = scene.get_scene_objects(of_type='Basic')
-        export_sets = _get_maya_sets(transforms)
+        scene.warning("Maya Bridge: Nothing to export!")
+        return      
 
-        if not export_sets:
-            #Set mistakenly became transforms when migrating to pycsc
-            #so now I have to cover this edge case.
-            transforms = scene.get_scene_objects(of_type="Transform")
-            export_sets = _get_maya_sets(transforms)            
-
-        
-        if export_sets:
-            print("Found previous import")
-            print(export_sets)
-        
-    #If not, then this must be a first time export, so let's make an export set
-    if not export_sets:
-        scene.edit('Create Maya Export Set', _create_new_set)
-        export_sets =  _get_maya_sets([new_object])
-        
-
-    up_axis = common.get_coord_system()
+    up_axis = common.get_maya_coord_system()
     if up_axis is None:
         print("Couldn't get Maya's Up Axis. Is Maya Running? Export Failed")
         return
@@ -110,19 +76,76 @@ def _export(cmd):
             #TODO: Change this to selection, once we know how to select a branch
             fbx.export_fbx(export_path, fbx.FbxFilterType.SELECTED) 
         
-
+    cmd = "cg3dcasc.core.import_fbx()"
     server.send_to_maya(common._active_port_number, cmd)
 
-
-def export_maya_animation():
+ 
+def export_sets(scene, export_sets):
     cmd = "cg3dcasc.core.import_fbx()"
-    _export(cmd)
     
 
-#def smart_export(port_number):
-    #common.set_active_port(port_number)
-    #export_maya_animation()
+def create_new_set_and_export(scene):
+    new_set = common.create_export_set(scene)
+    export_sets = set() if new_set is None else {new_set}
+    _export(scene, export_sets)
+
+
+def determine_export_action(scene):
+    maya_sets = common.get_maya_set_ids()
+    if maya_sets is None:
+        scene.error("Is Maya Connected? Export failed.")
+        return    
     
+    all_sets, selected_sets = common.get_export_sets(scene)
+    export_sets = selected_sets if selected_sets else all_sets
+    
+    matches = set()
+    for export_set in export_sets:
+        maya_beh = export_set.get_behaviour_by_name(common.MAYA_BEHAVIOUR_NAME)
+        maya_id = maya_beh.datasWithSameNamesReadonly.get_by_name('maya_id')[0].get()
+
+        if maya_id in maya_sets:
+            matches.add(export_set)
+
+    message = ''
+    dialog_buttons = ''
+    #0,0
+    if not maya_sets and not export_sets:
+        message = "There's no data to export.\nDo you want to add the Cascadeur scene to Maya?"
+        dialog_buttons = [csc.view.DialogButton("Yes", lambda: create_new_set_and_export(scene)),
+                          csc.view.DialogButton(csc.view.StandardButton.Cancel)]
+    #1,0
+    elif maya_sets and not export_sets:
+        message = "Cascadeur doesn't have the data found in Maya.\nDo you want to add the Cascadeur scene to Maya?"
+        dialog_buttons = [csc.view.DialogButton("Yes", lambda: create_new_set_and_export(scene)),
+                          csc.view.DialogButton(csc.view.StandardButton.Cancel)]
+    #0,1
+    elif not maya_sets and export_sets:
+        message = "This will add new data to Maya. Continue?"
+        dialog_buttons = [csc.view.DialogButton("Yes", lambda: _export(scene, export_sets)),
+                          csc.view.DialogButton(csc.view.StandardButton.Cancel)]
+    #!=
+    elif len(export_sets) != len(matches):
+        message = "What do you want to export?"
+        dialog_buttons = [csc.view.DialogButton("Only matching data", lambda: _export(scene, matches)),
+                          csc.view.DialogButton("All export data", lambda: _export(scene, export_sets)),
+                          csc.view.DialogButton(csc.view.StandardButton.Cancel)]
+    #1,1
+    else:
+        #the amount of data matches between both scenes
+        _export(scene, export_sets)
+        return
+    
+    if message and dialog_buttons:
+        csc.view.DialogManager.instance().show_buttons_dialog("Maya Bridge", message,
+                                                              dialog_buttons)
+        
+
+def export_maya_animation():   
+    scene = pycsc.get_current_scene().ds
+    _clean_export_location()
+    determine_export_action(scene)
+
 
 def run(*args, **kwargs):
     export_maya_animation()

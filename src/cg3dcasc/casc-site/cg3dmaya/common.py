@@ -6,7 +6,7 @@
 #import tempfile
 #import os
 #import pathlib
-#import uuid
+import uuid
 
 #import common.hierarchy
 #import rig_gen.add_support_info as rg_s_inf
@@ -70,18 +70,42 @@ def _create_data(scene, set_name, maya_id, new_roots):
     return obj
 
 
-def get_set_ids():
-    """Return a list of ids in the current scene"""
+def create_export_set(scene):
+    new_object = None
+    def _create_new_set(scene):
+        print("Making new set")
+        nonlocal new_object
+        current_roots = scene.get_scene_objects(only_roots=True)
+        if not current_roots:
+            return
+        
+        set_name = "MAYA_DATA_EXPORT"
+        maya_id = uuid.uuid1()
+        new_object = _create_data(scene, set_name, str(maya_id), current_roots)
+        
+    scene.edit('Create Maya Export Set', _create_new_set)
+    return new_object
+
+
+def get_export_sets(scene, selected=False):
+    export_sets = {b.object for b in scene.get_behaviours(MAYA_BEHAVIOUR_NAME)}
+    selected_sets = {o for o in scene.get_scene_objects(selected=True) if o in export_sets}
     
+    return (export_sets, selected_sets)
+
+
+def get_maya_set_ids():
+    """Return a list of ids in the current scene"""
+
     cmd = "cg3dcasc.core.get_set_ids()"
     success, data = server.send_and_listen(get_active_port(), cmd)
     if not success:
         return None
 
-    return data
+    return set(data)
 
 
-def get_coord_system():
+def get_maya_coord_system():
     """returns the active coordinate system in Maya"""
     
     cmd = "cg3dcasc.core.get_coord_system()"
@@ -108,4 +132,5 @@ def set_active_port(port_number):
 def report_port_number():
     global _active_port_number
     scene = pycsc.get_current_scene().ds
-    scene.success(f"Connected to :{_active_port_number}")    
+    scene.success(f"Connected to :{_active_port_number}")
+

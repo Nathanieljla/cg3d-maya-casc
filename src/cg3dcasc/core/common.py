@@ -160,10 +160,11 @@ def get_set_ids():
     data = []
     scene_sets = pm.ls(type='objectSet')
     export_sets = cg3dguru.udata.Utils.get_nodes_with_data(scene_sets, data_class=CascExportData)
+    data = [e.cscDataId.get() for e in export_sets]
 
-    for export_set in export_sets:
-        print(export_set)
-        data = ["1", 2]
+    #for export_set in export_sets:
+        #print(export_set)
+        #data = ["1", 2]
         
     client.data_to_casc(data)
  
