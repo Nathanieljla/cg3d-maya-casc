@@ -107,25 +107,30 @@ def determine_export_action(scene):
         if maya_id in maya_sets:
             matches.add(export_set)
 
+    title = ''
     message = ''
     dialog_buttons = ''
     #0,0
     if not maya_sets and not export_sets:
+        title = "Maya:0, Casc:0"
         message = "There's no data to export.\nDo you want to add the Cascadeur scene to Maya?"
         dialog_buttons = [csc.view.DialogButton("Yes", lambda: create_new_set_and_export(scene)),
                           csc.view.DialogButton(csc.view.StandardButton.Cancel)]
     #1,0
     elif maya_sets and not export_sets:
+        title = f"Maya:{len(maya_sets)} Casc:0"
         message = "Cascadeur doesn't have the data found in Maya.\nDo you want to add the Cascadeur scene to Maya?"
         dialog_buttons = [csc.view.DialogButton("Yes", lambda: create_new_set_and_export(scene)),
                           csc.view.DialogButton(csc.view.StandardButton.Cancel)]
     #0,1
     elif not maya_sets and export_sets:
+        title = f"Maya:0 Casc:{len(export_sets)}"
         message = "This will add new data to Maya. Continue?"
         dialog_buttons = [csc.view.DialogButton("Yes", lambda: _export(scene, export_sets)),
                           csc.view.DialogButton(csc.view.StandardButton.Cancel)]
     #!=
     elif len(export_sets) != len(matches):
+        title = f"Maya:{len(maya_sets)} Casc:{len(export_sets)} Common:{len(matches)}"
         message = "What do you want to export?"
         dialog_buttons = [csc.view.DialogButton("Only matching data", lambda: _export(scene, matches)),
                           csc.view.DialogButton("All export data", lambda: _export(scene, export_sets)),
@@ -137,7 +142,7 @@ def determine_export_action(scene):
         return
     
     if message and dialog_buttons:
-        csc.view.DialogManager.instance().show_buttons_dialog("Maya Bridge", message,
+        csc.view.DialogManager.instance().show_buttons_dialog(title, message,
                                                               dialog_buttons)
         
 

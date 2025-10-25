@@ -1,6 +1,5 @@
 
 
-
 #import json
 #import typing
 #import tempfile
@@ -70,12 +69,15 @@ def _create_data(scene, set_name, maya_id, new_roots):
     return obj
 
 
-def create_export_set(scene):
+def create_export_set(scene, current_roots=None):
     new_object = None
     def _create_new_set(scene):
         print("Making new set")
-        nonlocal new_object
-        current_roots = scene.get_scene_objects(only_roots=True)
+        nonlocal new_object, current_roots
+        
+        if current_roots is None:
+            current_roots = scene.get_scene_objects(only_roots=True)
+            
         if not current_roots:
             return
         
@@ -88,10 +90,135 @@ def create_export_set(scene):
 
 
 def get_export_sets(scene, selected=False):
-    export_sets = {b.object for b in scene.get_behaviours(MAYA_BEHAVIOUR_NAME)}
-    selected_sets = {o for o in scene.get_scene_objects(selected=True) if o in export_sets}
+    all_sets = {b.object for b in scene.get_behaviours(MAYA_BEHAVIOUR_NAME)}
+    selected_sets = {o for o in scene.get_scene_objects(selected=True) if o in all_sets}
     
-    return (export_sets, selected_sets)
+    return (all_sets, selected_sets)
+
+
+def _get_roots_from_selected(selected):
+    searched = set()
+    roots = set()
+    def walk_up(obj):
+        nonlocal roots, searched
+
+        if obj in searched:
+            return
+        
+        searched.add(obj)
+        parent = obj.parent
+        if parent is None:
+            roots.add(obj)
+            return
+        else:
+            walk_up(parent)
+
+    for obj in selected:
+        walk_up(obj)
+        
+    return roots
+
+
+def _get_filtered_selection(scene):
+    selected = scene.get_scene_objects(selected=True)
+    selected = {obj for obj in selected if not isinstance(obj.handle, csc.domain.Tool_object_id)}
+    if not selected:
+        scene.error("Please select some objects")
+        return []
+
+    return _get_roots_from_selected(selected)
+
+
+def _add_to_set(scene, objects, target_set):
+    def mod(scene):
+        nonlocal objects, target_set
+        
+        root_beh = target_set.get_behaviour_by_name(MAYA_ROOTS)
+        if not root_beh:
+            scene.error("Can't find Maya Roots Behaviour")
+            return
+
+        for obj in objects:
+            basic_beh = obj.get_behaviour_by_name("Basic")
+            if not basic_beh:
+                continue
+            
+            root_beh.behaviours.add(basic_beh)
+
+    scene.edit("Add selected to set", mod)
+
+
+def add_selection_to(new_set: bool):
+    scene = pycsc.get_current_scene().ds
+    selected_roots = _get_filtered_selection(scene)
+    if not selected_roots:
+        return
+
+    all_sets, selected_sets = get_export_sets(scene)
+    maya_roots = set()
+    
+    for export_set in all_sets:
+        beh = export_set.get_behaviour_by_name(MAYA_ROOTS)
+        if beh:
+            assigned_roots = {b.object for b in beh.behaviours.get()}
+            maya_roots.update(assigned_roots)
+
+    new_roots = {obj for obj in selected_roots if obj not in maya_roots and obj not in all_sets}
+    if not new_roots:
+        scene.error("Selected objects are already assigned to existing export sets")
+        return
+    
+    target_sets = selected_sets if selected_sets else all_sets
+    if new_set or not target_sets:
+        create_export_set(scene, new_roots)
+        return
+
+    if len(target_sets) == 1:
+        _add_to_set(scene, new_roots, list(target_sets)[0])
+        return
+
+    dialog_buttons = []
+    for target_set in target_sets:
+        dialog_buttons.append(
+            csc.view.DialogButton(target_set.name, lambda: _add_to_set(scene, new_roots, target_set))
+        )
+        
+    dialog_buttons.append(csc.view.DialogButton(csc.view.StandardButton.Cancel))
+    csc.view.DialogManager.instance().show_buttons_dialog("Add selected to", "Pick a set to add you selection to",
+                                                          dialog_buttons)
+
+
+def remove_selection_from():
+    scene = pycsc.get_current_scene().ds
+    selected_roots = _get_filtered_selection(scene)
+    if not selected_roots:
+        return
+
+    all_sets, selected_sets = get_export_sets(scene)
+    selected_roots = {obj for obj in selected_roots if obj not in all_sets}
+    roots_to_remove = {}
+    removed_count = 0
+    for export_set in all_sets:
+        beh = export_set.get_behaviour_by_name(MAYA_ROOTS)
+        if not beh:
+            continue
+        
+        assigned_roots = {b.object for b in beh.behaviours.get()}
+        common_elements = assigned_roots & selected_roots
+        if common_elements:
+            common_elements = {obj.get_behaviour_by_name("Basic") for obj in common_elements if obj.get_behaviour_by_name("Basic")}
+            roots_to_remove[beh] = common_elements
+            removed_count += len(common_elements)
+            
+    def mod(scene):
+        nonlocal roots_to_remove
+        for beh, objs in roots_to_remove.items():
+            for obj in objs:
+                beh.behaviours.remove(obj)
+
+    scene.edit("Remove selected from export set", mod)
+    scene.success(f"Removed {common_elements} count")
+    
 
 
 def get_maya_set_ids():
@@ -123,7 +250,8 @@ def get_maya_coord_system():
         case _:
             return None
 
-     
+
+
 def set_active_port(port_number):
     global _active_port_number
     _active_port_number = int(port_number)
@@ -133,4 +261,8 @@ def report_port_number():
     global _active_port_number
     scene = pycsc.get_current_scene().ds
     scene.success(f"Connected to :{_active_port_number}")
+    
+    
+    
+
 
