@@ -236,15 +236,16 @@ def get_textures(objs, export_nodes=[]):
 
 
 def cascadeur_available():
-    start_time = time.time()
+    #start_time = time.time()
     result = wingcarrier.pigeons.CascadeurPigeon().can_dispatch()
-    print(f"Time to check Dispatch: {time.time() - start_time}")
+    #print(f"Time to check Dispatch: {time.time() - start_time}")
     return result
 
 
 def export(export_set=None, export_rig=False, cmd='', textures=True, only_textures=False):
     if cmd and not cascadeur_available():
-        pm.confirmDialog(message="Please launch Cascadeur, then try again.",button=['Okay'])
+        pm.displayError("Please make sure Cascadeur is running and try again.")
+        #pm.confirmDialog(message="Please launch Cascadeur, then try again.",button=['Okay'])
         return False
     
     #remove any previous exports

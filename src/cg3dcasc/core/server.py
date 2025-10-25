@@ -65,8 +65,8 @@ def send_to_casc(cmd):
         casc = wingcarrier.pigeons.CascadeurPigeon()
 
         if not casc.send_python_command(cmd):
-            pm.confirmDialog(message="Please make sure Cascadeur is running and try again.", button=['Okay'])
-            #pm.error("Please make sure Cascadeur is running and try again.")
+            #pm.confirmDialog(message="Please make sure Cascadeur is running and try again.", button=['Okay'])
+            pm.displayError("Please make sure Cascadeur is running and try again.")
         else:
             success = True
 
