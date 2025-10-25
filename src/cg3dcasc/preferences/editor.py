@@ -28,15 +28,12 @@ class Cg3dCascPrefs(cg3dguru.ui.Window):
         
         self.ui.joint_scale.setChecked(self.prefs.derig_reset_joint_scale)
         self.ui.maintain_parent_offset.setChecked(self.prefs.derig_maintain_offset)
-        self.ui.connect_from_registry.setChecked(self.prefs.connect_from_registry)
 
-        
     def save_prefs(self, *args, **kwargs):
         self.prefs.bake_animations = cg3dcasc.preferences.OptionEnum(self.ui.bake_choice.currentText())
         self.prefs.texture_conversion = cg3dcasc.preferences.TextureConversionType(self.ui.texture_choice.currentText())
         self.prefs.derig_reset_joint_scale = self.ui.joint_scale.isChecked()
         self.prefs.derig_maintain_offset = self.ui.maintain_parent_offset.isChecked()
-        self.prefs.connect_from_registry = self.ui.connect_from_registry.isChecked()
 
         cg3dcasc.preferences.set(self.prefs)
         self.ui.close()

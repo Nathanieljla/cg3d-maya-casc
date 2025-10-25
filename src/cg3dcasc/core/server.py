@@ -59,14 +59,18 @@ def handle_client(conn, addr):
 def send_to_casc(cmd):
     import wingcarrier.pigeons
 
+    success = False
     if command_port.open():
         cmd = f"import cg3dmaya; cg3dmaya.set_active_port({command_port.port_number}); {cmd}"
         casc = wingcarrier.pigeons.CascadeurPigeon()
-        casc.connect_from_registry = preferences.get().connect_from_registry
-        try:
-            casc.send_python_command(cmd)
-        except ProcessLookupError:
-            pm.error("Please make sure Cascadeur is running and try again.")
+
+        if not casc.send_python_command(cmd):
+            pm.confirmDialog(message="Please make sure Cascadeur is running and try again.", button=['Okay'])
+            #pm.error("Please make sure Cascadeur is running and try again.")
+        else:
+            success = True
+
+    return success
 
         
 def send_and_listen(cmd):
