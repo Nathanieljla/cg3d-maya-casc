@@ -218,19 +218,29 @@ def remove_selection_from():
 
     scene.edit("Remove selected from export set", mod)
     scene.success(f"Removed {common_elements} count")
-    
 
 
-def get_maya_set_ids():
-    """Return a list of ids in the current scene"""
+def get_all_maya_set_ids():
+    """Return a list of all ids in the current Maya scene"""
 
-    cmd = "cg3dcasc.core.get_set_ids()"
+    cmd = "cg3dcasc.core.get_all_set_ids()"
     success, data = server.send_and_listen(get_active_port(), cmd)
     if not success:
         return None
 
     return set(data)
 
+
+def get_selected_maya_set_ids():
+    """Return a list of all selected ids in the current Maya scene"""
+
+    cmd = "cg3dcasc.core.get_selected_set_ids()"
+    success, data = server.send_and_listen(get_active_port(), cmd)
+    if not success:
+        return None
+
+    return set(data)    
+    
 
 def get_maya_coord_system():
     """returns the active coordinate system in Maya"""
@@ -251,7 +261,6 @@ def get_maya_coord_system():
             return None
 
 
-
 def set_active_port(port_number):
     global _active_port_number
     _active_port_number = int(port_number)
@@ -262,6 +271,35 @@ def report_port_number():
     scene = pycsc.get_current_scene().ds
     scene.success(f"Connected to :{_active_port_number}")
     
+
+def _sync_id(maya_id, export_set):
+    print(maya_id)
+    
+    
+def sync_selected_set_ids():
+    scene = pycsc.get_current_scene().ds
+    
+    maya_ids = get_selected_maya_set_ids()
+    if maya_ids is None:
+        scene.error("Is Maya Connected? Sync failed.")
+        return
+    
+    all_sets, selected_sets = get_export_sets(scene)
+    if len(maya_ids) != 1 or len(selected_sets) != 1:
+        scene.error("Select exactly one export set in Maya and Cascadeur. Sync Failed")
+        return
+
+    maya_id = list(maya_ids)[0]
+    export_set = list(selected_sets)[0]
+    
+    dialog_buttons = [csc.view.DialogButton("Yes", lambda: _sync_id(maya_id, export_set)),
+                      csc.view.DialogButton(csc.view.StandardButton.Cancel)]
+    
+    message = "Warning: Syncing IDs should only be done if you understand the risks.\nSee documentation for more details.\nContinue?"
+    csc.view.DialogManager.instance().show_buttons_dialog("Maya Bridge - Sync Ids", message,
+                                                          dialog_buttons)
+    
+
     
     
 

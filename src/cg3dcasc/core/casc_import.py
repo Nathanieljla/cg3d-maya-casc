@@ -46,6 +46,7 @@ def get_import_files():
 
 
 def import_fbx():
+    pm.mel.eval('if (!`pluginInfo -q -l "fbxmaya"`){ loadPlugin "fbxmaya"; }')
     files = get_import_files()
     print(f"Importing:{files}")
     

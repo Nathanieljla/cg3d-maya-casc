@@ -147,27 +147,37 @@ def update_skinned_data_sets(joints, meshes, skin_clusters, transforms):
         get_skin_cluster_meshes(skin_clusters)
     )
     
+
+def get_selected_export_nodes():
+    selected_sets = pm.ls(sl=True, type='objectSet')
+    return cg3dguru.udata.Utils.get_nodes_with_data(selected_sets, data_class=CascExportData)
+
+
+def get_all_export_nodes():
+    all_sets = pm.ls(type='objectSet')
+    return cg3dguru.udata.Utils.get_nodes_with_data(all_sets, data_class=CascExportData)
     
+
 def get_export_nodes():
-    scene_sets = pm.ls(sl=True, type='objectSet')
-    if not scene_sets:
-        scene_sets = pm.ls(type='objectSet')
-    
-    return cg3dguru.udata.Utils.get_nodes_with_data(scene_sets, data_class=CascExportData)
+    selected_sets = get_selected_export_nodes()
+    return selected_sets if selected_sets else get_all_export_nodes()
 
 
-def get_set_ids():
+def get_all_set_ids():
     data = []
-    scene_sets = pm.ls(type='objectSet')
-    export_sets = cg3dguru.udata.Utils.get_nodes_with_data(scene_sets, data_class=CascExportData)
+    export_sets = get_all_export_nodes()
     data = [e.cscDataId.get() for e in export_sets]
 
-    #for export_set in export_sets:
-        #print(export_set)
-        #data = ["1", 2]
-        
     client.data_to_casc(data)
- 
+    
+    
+def get_selected_set_ids():
+    data = []
+    export_sets = get_selected_export_nodes()
+    data = [e.cscDataId.get() for e in export_sets]
+
+    client.data_to_casc(data)    
+    
 
 def get_coord_system():
     data = pm.cmds.upAxis(q=True, axis=True)

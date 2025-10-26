@@ -91,7 +91,7 @@ def create_new_set_and_export(scene):
 
 
 def determine_export_action(scene):
-    maya_sets = common.get_maya_set_ids()
+    maya_sets = common.get_all_maya_set_ids()
     if maya_sets is None:
         scene.error("Is Maya Connected? Export failed.")
         return    
@@ -109,17 +109,11 @@ def determine_export_action(scene):
 
     title = ''
     message = ''
-    dialog_buttons = ''
-    #0,0
-    if not maya_sets and not export_sets:
-        title = "Maya:0, Casc:0"
-        message = "There's no data to export.\nDo you want to add the Cascadeur scene to Maya?"
-        dialog_buttons = [csc.view.DialogButton("Yes", lambda: create_new_set_and_export(scene)),
-                          csc.view.DialogButton(csc.view.StandardButton.Cancel)]
-    #1,0
-    elif maya_sets and not export_sets:
+    dialog_buttons = ''                  
+
+    if not export_sets:
         title = f"Maya:{len(maya_sets)} Casc:0"
-        message = "Cascadeur doesn't have the data found in Maya.\nDo you want to add the Cascadeur scene to Maya?"
+        message = "There's no data to export.\nDo you want to create a new export set and add it Maya?\n(The export set will contain all scene data)"
         dialog_buttons = [csc.view.DialogButton("Yes", lambda: create_new_set_and_export(scene)),
                           csc.view.DialogButton(csc.view.StandardButton.Cancel)]
     #0,1

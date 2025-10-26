@@ -95,8 +95,9 @@ def _export_data(export_data, export_folder: pathlib.Path, export_rig: bool, exp
     add_transform_roots(joints, root_transforms)
     add_transform_roots(meshes, root_transforms)
     add_transform_roots(transforms, root_transforms)    
-    
+
     if export_fbx:
+        pm.mel.eval('if (!`pluginInfo -q -l "fbxmaya"`){ loadPlugin "fbxmaya"; }')
         #Hik should be exported from the stand position only when
         #exporting a rig
         current_source = None
