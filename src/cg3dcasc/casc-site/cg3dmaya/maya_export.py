@@ -72,7 +72,7 @@ def _export(scene, export_sets):
             settings = csc.fbx.FbxSettings()
             settings.bake_animation = bake_anim_data[0].get()
             #axis is wrong
-            #settings.up_axis = #up_axis
+            #settings.up_axis = up_axis
 
             fbx.export_fbx(export_path, fbx.FbxFilterType.SELECTED, settings)
         

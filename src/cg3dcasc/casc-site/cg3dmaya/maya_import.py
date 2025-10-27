@@ -182,6 +182,12 @@ def _import_maya(new_scene, import_filter: fbx.FbxFilterType):
             files[name] = dict()
 
         files[name][ext.lower()] = str(child)
+        
+        
+    up_axis = common.get_maya_coord_system()
+    if up_axis is None:
+        print("Couldn't get Maya's Up Axis. Is Maya Running? Export Failed")
+        return
 
     import_rig = ''
     for key, item in files.items():
@@ -219,7 +225,10 @@ def _import_maya(new_scene, import_filter: fbx.FbxFilterType):
 
                 #scene.edit('Change selection', lambda x: scene.select(new_selection))
 
-            fbx.import_fbx(fbx_path, modified_filter)
+
+            settings = csc.fbx.FbxSettings()
+            #settings.up_axis = up_axis
+            fbx.import_fbx(fbx_path, modified_filter, False, settings)
 
             current_roots = set(scene.get_scene_objects(only_roots=True))
             new_roots = current_roots.difference(scene_roots)
