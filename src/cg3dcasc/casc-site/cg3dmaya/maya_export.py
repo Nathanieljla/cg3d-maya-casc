@@ -73,8 +73,7 @@ def _export(scene, export_sets):
             settings.bake_animation = bake_anim_data[0].get()
             settings.up_axis = up_axis
 
-            #TODO: Change this to selection, once we know how to select a branch
-            fbx.export_fbx(export_path, fbx.FbxFilterType.SELECTED) 
+            fbx.export_fbx(export_path, fbx.FbxFilterType.SELECTED, settings)
         
     cmd = "cg3dcasc.core.import_fbx()"
     server.send_to_maya(common._active_port_number, cmd)
@@ -111,23 +110,24 @@ def determine_export_action(scene):
     message = ''
     dialog_buttons = ''                  
 
+    title = f"Maya:{len(maya_sets)} Casc:{len(export_sets)} Common:{len(matches)}"
     if not export_sets:
-        title = f"Maya:{len(maya_sets)} Casc:0"
+        #title = f"Maya:{len(maya_sets)} Casc:0"
         message = "There's no data to export.\nDo you want to create a new export set and add it Maya?\n(The export set will contain all scene data)"
         dialog_buttons = [csc.view.DialogButton("Yes", lambda: create_new_set_and_export(scene)),
                           csc.view.DialogButton(csc.view.StandardButton.Cancel)]
     #0,1
     elif not maya_sets and export_sets:
-        title = f"Maya:0 Casc:{len(export_sets)}"
+        #title = f"Maya:0 Casc:{len(export_sets)}"
         message = "This will add new data to Maya. Continue?"
         dialog_buttons = [csc.view.DialogButton("Yes", lambda: _export(scene, export_sets)),
                           csc.view.DialogButton(csc.view.StandardButton.Cancel)]
     #!=
     elif len(export_sets) != len(matches):
-        title = f"Maya:{len(maya_sets)} Casc:{len(export_sets)} Common:{len(matches)}"
         message = "What do you want to export?"
-        dialog_buttons = [csc.view.DialogButton("Only matching data", lambda: _export(scene, matches)),
-                          csc.view.DialogButton("All export data", lambda: _export(scene, export_sets)),
+        all_message = "All Selected Export Sets" if export_sets == selected_sets else "All Scene Export Sets"
+        dialog_buttons = [csc.view.DialogButton("Only Matching Export Sets", lambda: _export(scene, matches)),
+                          csc.view.DialogButton(all_message, lambda: _export(scene, export_sets)),
                           csc.view.DialogButton(csc.view.StandardButton.Cancel)]
     #1,1
     else:

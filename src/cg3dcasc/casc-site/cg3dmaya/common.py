@@ -70,21 +70,55 @@ def _create_data(scene, set_name, maya_id, new_roots):
     return obj
 
 
-def create_export_set(scene, current_roots=None):
-    new_object = None
-    def _create_new_set(scene):
-        print("Making new set")
-        nonlocal new_object, current_roots
+def get_set_members(export_set):
+    beh = export_set.get_behaviour_by_name(MAYA_ROOTS)
+    if beh:
+        return {b.object for b in beh.behaviours.get()}
+
+    return set()
+
+
+def get_ids(export_sets):
+    ids = {}
+    for export_set in export_sets:
+        export_beh = export_set.get_behaviours_by_name(MAYA_BEHAVIOUR_NAME)[0]
+        ids[export_beh.datasWithSameNamesReadonly.get_by_name('maya_id')[0].get()] = export_set
         
-        if current_roots is None:
-            current_roots = scene.get_scene_objects(only_roots=True)
-            
-        if not current_roots:
+    return ids
+
+
+def remove_export_sets(scene, objs: set):
+    all_sets, selected_sets = get_export_sets(scene)
+    maya_roots = set()
+
+    for export_set in all_sets:
+        maya_roots.update(get_set_members(export_set))
+        #beh = export_set.get_behaviour_by_name(MAYA_ROOTS)
+        #if beh:
+            #assigned_roots = {b.object for b in beh.behaviours.get()}
+            #maya_roots.update(assigned_roots)
+
+    new_roots = {obj for obj in objs if obj not in maya_roots and obj not in all_sets}
+    return new_roots
+
+
+def create_export_set(scene, root_objects=None):
+    new_object = None
+    
+    def _create_new_set(scene):
+        nonlocal new_object, root_objects
+        
+        if not root_objects:
+            root_objects = scene.get_scene_objects(only_roots=True)
+
+        root_objects = remove_export_sets(scene, root_objects)
+        if not root_objects:
             return
         
+        print("Making new set")
         set_name = "MAYA_DATA_EXPORT"
         maya_id = uuid.uuid1()
-        new_object = _create_data(scene, set_name, str(maya_id), current_roots)
+        new_object = _create_data(scene, set_name, str(maya_id), root_objects)
         
     scene.edit('Create Maya Export Set', _create_new_set)
     return new_object
@@ -120,10 +154,10 @@ def _get_roots_from_selected(selected):
     return roots
 
 
-def _get_filtered_selection(scene):
+def _get_filtered_selection(scene, selected_required=True):
     selected = scene.get_scene_objects(selected=True)
     selected = {obj for obj in selected if not isinstance(obj.handle, csc.domain.Tool_object_id)}
-    if not selected:
+    if not selected and selected_required:
         scene.error("Please select some objects")
         return []
 
@@ -133,7 +167,7 @@ def _get_filtered_selection(scene):
 def _add_to_set(scene, objects, target_set):
     def mod(scene):
         nonlocal objects, target_set
-        
+
         root_beh = target_set.get_behaviour_by_name(MAYA_ROOTS)
         if not root_beh:
             scene.error("Can't find Maya Roots Behaviour")
@@ -147,31 +181,26 @@ def _add_to_set(scene, objects, target_set):
             root_beh.behaviours.add(basic_beh)
 
     scene.edit("Add selected to set", mod)
-
+    
 
 def add_selection_to(new_set: bool):
     scene = pycsc.get_current_scene().ds
-    selected_roots = _get_filtered_selection(scene)
-    if not selected_roots:
+    selected_roots = _get_filtered_selection(scene, not new_set)
+    if not selected_roots and not new_set:
         return
 
     all_sets, selected_sets = get_export_sets(scene)
-    maya_roots = set()
+    new_roots = remove_export_sets(scene, selected_roots)
     
-    for export_set in all_sets:
-        beh = export_set.get_behaviour_by_name(MAYA_ROOTS)
-        if beh:
-            assigned_roots = {b.object for b in beh.behaviours.get()}
-            maya_roots.update(assigned_roots)
-
-    new_roots = {obj for obj in selected_roots if obj not in maya_roots and obj not in all_sets}
-    if not new_roots:
+    if not new_roots and not new_set:
         scene.error("Selected objects are already assigned to existing export sets")
         return
     
     target_sets = selected_sets if selected_sets else all_sets
     if new_set or not target_sets:
-        create_export_set(scene, new_roots)
+        new_set = create_export_set(scene, new_roots)
+        if not new_set:
+            scene.error("Selected objects are already assigned to existing export sets")
         return
 
     if len(target_sets) == 1:
@@ -218,7 +247,51 @@ def remove_selection_from():
                 beh.behaviours.remove(obj)
 
     scene.edit("Remove selected from export set", mod)
-    scene.success(f"Removed {common_elements} count")
+    scene.success(f"Removed {removed_count} objects from export")
+    
+
+def _select_set_members(scene, export_set):
+    selected = True
+    def mod(scene):
+        nonlocal selected
+        set_members = get_set_members(export_set)
+        if not set_members:
+            selected = False
+            return
+            
+        scene.select(set_members)
+        
+    scene.edit("Select Set Members", mod)
+    return selected
+    
+
+def select_set_members():
+    scene = pycsc.get_current_scene().ds
+    all_sets, selected_sets = get_export_sets(scene)
+    target_sets = selected_sets if selected_sets else all_sets
+
+    if not target_sets:
+        scene.error("Not export sets found!")
+        return
+
+    if len(target_sets) == 1:
+        if not _select_set_members(scene, list(target_sets)[0]):
+            scene.error("Nothing to select")
+        else:
+            scene.success("Selection complete")
+            
+        return
+        
+        
+    dialog_buttons = []
+    for target_set in target_sets:
+        dialog_buttons.append(
+            csc.view.DialogButton(target_set.name, lambda: _select_set_members(scene, target_set))
+        )
+        
+    dialog_buttons.append(csc.view.DialogButton(csc.view.StandardButton.Cancel))
+    csc.view.DialogManager.instance().show_buttons_dialog("Select Set Members", "Select members from",
+                                                          dialog_buttons)
 
 
 def get_all_maya_set_ids():
@@ -281,17 +354,14 @@ def _sync_id(scene, maya_id, export_set):
         nonlocal maya_id
         scene.de.set_data_value(id_data, maya_id)
 
-    scene.edit("Replace Maya ID", mod)
+    if scene.edit("Replace Maya ID", mod):
+        scene.success("Sync Complete")
     
 
 def get_selected_ids():
     scene = pycsc.get_current_scene().ds
     all_sets, selected_sets = get_export_sets(scene)
-    ids = []
-
-    for export_set in selected_sets:
-        export_beh = export_set.get_behaviours_by_name(MAYA_BEHAVIOUR_NAME)[0]
-        ids.append(export_beh.datasWithSameNamesReadonly.get_by_name('maya_id')[0].get())
+    ids = list(get_ids(selected_sets).keys())
         
     client.data_to_maya(scene, ids)
     
@@ -308,9 +378,14 @@ def sync_selected_set_ids():
     if len(maya_ids) != 1 or len(selected_sets) != 1:
         scene.error("Select exactly one export set in Maya and Cascadeur. Sync Failed")
         return
-
+    
     maya_id = list(maya_ids)[0]
     export_set = list(selected_sets)[0]
+    
+    ids = get_ids(all_sets)
+    if maya_id in ids:
+        scene.error(f"Maya Id already assigned to {ids[maya_id].name}")
+        return        
     
     dialog_buttons = [csc.view.DialogButton("Yes", lambda: _sync_id(scene, maya_id, export_set)),
                       csc.view.DialogButton(csc.view.StandardButton.Cancel)]
