@@ -19,6 +19,7 @@ except:
 
 import cg3dguru.ui
 from . import common
+from . import server
 from .udata import *
 
 CLONE_PREFIX = 'CASC'
@@ -534,7 +535,6 @@ def _derig_selection():
     return True
 
 
-
 def constrain_proxy():
     import cg3dguru.udata
 
@@ -562,7 +562,38 @@ def constrain_proxy():
         source = proxy.proxySource.get()
         if source:
             pm.parentConstraint(source, proxy, maintainOffset=maintain_offset)
+            
+                       
+def sync_casc_id():
+    selected_export_sets = common.get_selected_export_nodes()
+    success, casc_ids = server.send_and_listen("cg3dmaya.get_selected_ids()")
     
+    if not success:
+        pm.displayError("Couldn't establish communication with Cascadeur")
+        return
+    
+    if len(selected_export_sets) != 1 or len(casc_ids) != 1:
+        pm.displayError("Select exactly one export set in Maya and Cascadeur")
+        return
+    
+    title = 'Cascadeur Bridge'
+    message = "Warning: Syncing IDs should only be done if you understand the risks.\nSee documentation for more details.\nContinue?"
+    
+    result = pm.confirmDialog(
+        title=title,
+        message=message,
+        button=['Yes', 'Cancel'],
+        defaultButton='Yes',
+        cancelButton='Cancel',
+        dismissString='Closed'
+    )
+
+    if result == 'Yes':
+        data_prop = selected_export_sets[0].cscDataId
+        data_prop.unlock()
+        data_prop.set(casc_ids[0])
+        data_prop.lock()
+        pm.displayInfo("ID Synced")  
 
 
 def derig_selection():

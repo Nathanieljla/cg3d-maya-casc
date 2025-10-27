@@ -14,6 +14,7 @@ import csc
 #import rig_mode.on as rm_on
 #import rig_mode.off as rm_off
 
+from . import client
 from . import server
 import pycsc
 #import pycsc as cg3dguru
@@ -272,10 +273,29 @@ def report_port_number():
     scene.success(f"Connected to :{_active_port_number}")
     
 
-def _sync_id(maya_id, export_set):
-    print(maya_id)
+def _sync_id(scene, maya_id, export_set):
+    export_beh = export_set.get_behaviours_by_name(MAYA_BEHAVIOUR_NAME)[0]
+    id_data = export_beh.datasWithSameNamesReadonly.get_by_name('maya_id')[0]
     
+    def mod(scene):
+        nonlocal maya_id
+        scene.de.set_data_value(id_data, maya_id)
+
+    scene.edit("Replace Maya ID", mod)
     
+
+def get_selected_ids():
+    scene = pycsc.get_current_scene().ds
+    all_sets, selected_sets = get_export_sets(scene)
+    ids = []
+
+    for export_set in selected_sets:
+        export_beh = export_set.get_behaviours_by_name(MAYA_BEHAVIOUR_NAME)[0]
+        ids.append(export_beh.datasWithSameNamesReadonly.get_by_name('maya_id')[0].get())
+        
+    client.data_to_maya(scene, ids)
+    
+
 def sync_selected_set_ids():
     scene = pycsc.get_current_scene().ds
     
@@ -292,7 +312,7 @@ def sync_selected_set_ids():
     maya_id = list(maya_ids)[0]
     export_set = list(selected_sets)[0]
     
-    dialog_buttons = [csc.view.DialogButton("Yes", lambda: _sync_id(maya_id, export_set)),
+    dialog_buttons = [csc.view.DialogButton("Yes", lambda: _sync_id(scene, maya_id, export_set)),
                       csc.view.DialogButton(csc.view.StandardButton.Cancel)]
     
     message = "Warning: Syncing IDs should only be done if you understand the risks.\nSee documentation for more details.\nContinue?"
