@@ -26,7 +26,7 @@ MAYA_ROOTS = 'Maya Roots'
 BAKE_ANIMATION = 'Bake Animation'
 
 
-_active_port_number = None
+_active_port_number = 6000
 
 
 def get_active_port():
@@ -180,7 +180,8 @@ def _add_to_set(scene, objects, target_set):
             
             root_beh.behaviours.add(basic_beh)
 
-    scene.edit("Add selected to set", mod)
+    if scene.edit("Add selected to set", mod):
+        scene.success("Added to set.")
     
 
 def add_selection_to(new_set: bool):

@@ -5,6 +5,10 @@ def casc_setup():
     try:
         import cg3dcasc
         import cg3dcasc.core
+        try:
+            cg3dcasc.command_port.open()
+        except:
+            pass
            
         print("Cascadeur: building Menu!")
         from cg3dguru.utils import menu_maker
