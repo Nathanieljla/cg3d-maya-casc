@@ -128,7 +128,7 @@ def send_and_listen(maya_command_port, cmd):
         print(f"Server listening on {HOST}:{server_port} for {TIMEOUT_SECONDS} seconds...")
         cmd = f"import time; time.sleep({SCRIPT_DELAY_TIME}); cg3dcasc.core.client.set_port({server_port}); {cmd}"
         if not send_to_maya(maya_command_port, cmd):
-            return
+            return (success, None)
 
         try:
             conn, addr = s.accept()
