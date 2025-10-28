@@ -379,8 +379,12 @@ def _clone_meshes(meshes, mesh_parent, skinned_parent, clone_pairing):
             for cluster in mesh_cluster_mapping[source_shape]:
                 mi = pm.animation.skinCluster(cluster, maximumInfluences=True, query=True)
                 influences = pm.animation.skinCluster(cluster, influence=True, query=True)
-    
-                cloned_cluster = pm.animation.skinCluster(*influences, mesh_proxy, mi=mi, multi=True, tsb=True) #test
+
+                if int(cmds.about(version=True)) > 2023:
+                    cloned_cluster = pm.animation.skinCluster(*influences, mesh_proxy, mi=mi, multi=True, tsb=True)
+                else:
+                    cloned_cluster = pm.animation.skinCluster(*influences, mesh_proxy, mi=mi, tsb=True)
+                    
                 pm.copySkinWeights(ss=cluster, ds=cloned_cluster, noMirror=True,
                                    surfaceAssociation='closestPoint', influenceAssociation='closestJoint')
                 
@@ -394,18 +398,19 @@ def _clone_meshes(meshes, mesh_parent, skinned_parent, clone_pairing):
                 vertices = skinned_geometry.vtx[:]
                 prune = False
                 remove_originals = True
+                
+                #don't use match case here due to not working with Maya 2023
+                if copy_method == preferences.CopyWeightType.SWAP: #Mazu: 19.8838, Waitress: 4.5856,
+                    remove_originals = False
+                    _copy_swap(mesh_proxy, cloned_cluster, clone_pairing, originals, replacements)
 
-                match copy_method:
-                    case preferences.CopyWeightType.SWAP: #Mazu: 19.8838, Waitress: 4.5856,
-                        remove_originals = False
-                        _copy_swap(mesh_proxy, cloned_cluster, clone_pairing, originals, replacements)
+                elif copy_method == preferences.CopyWeightType.FLOOD: #Mazu: 158.3618, Waitress: 18.1239,
+                    prune = True
+                    _copy_flood(mesh_proxy, cloned_cluster, clone_pairing, originals, replacements, vertices)
+        
+                elif copy_method == preferences.CopyWeightType.PER_VERT: #Mazu: 138.2624, Waitress: 70.3756,
+                    _copy_per_vert(mesh_proxy, cloned_cluster, clone_pairing, originals, replacements)                
 
-                    case preferences.CopyWeightType.FLOOD: #Mazu: 158.3618, Waitress: 18.1239,
-                        prune = True
-                        _copy_flood(mesh_proxy, cloned_cluster, clone_pairing, originals, replacements, vertices)
-            
-                    case preferences.CopyWeightType.PER_VERT: #Mazu: 138.2624, Waitress: 70.3756,
-                        _copy_per_vert(mesh_proxy, cloned_cluster, clone_pairing, originals, replacements)
 
                 cloned_cluster.normalizeWeights.set(2)
                 if remove_originals:
@@ -414,7 +419,7 @@ def _clone_meshes(meshes, mesh_parent, skinned_parent, clone_pairing):
 
                 for influence in cloned_cluster.getInfluence():
                     pm.skinCluster(cloned_cluster, edit=True, lockWeights=False, influence=influence)
-                    
+
                 cloned_cluster.normalizeWeights.set(1)
                 if prune:
                     pm.animation.skinPercent(cloned_cluster, vertices, pruneWeights=0.005)
