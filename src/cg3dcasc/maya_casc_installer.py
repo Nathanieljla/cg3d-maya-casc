@@ -1598,7 +1598,7 @@ class MyInstaller(ModuleManager):
 def main():
     if MAYA_RUNNING:
         MODULE_NAME = 'cascadeur'
-        MODULE_VERSION = 1.5
+        MODULE_VERSION = 1.6
         PACKAGE_NAME = "cg3d-maya-casc"
         
         manager = MyInstaller(MODULE_NAME, MODULE_VERSION, package_name = PACKAGE_NAME)
