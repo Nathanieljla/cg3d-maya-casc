@@ -58,7 +58,9 @@ class DropLineEdit(QLineEdit):
 class HikExportEditor(cg3dguru.ui.Window):
     def __init__(self, windowKey, uiFilepath, *args, **kwargs):
         custom_widgets = [DropLineEdit]
-        super(HikExportEditor, self).__init__(windowKey, uiFilepath, custom_widgets = custom_widgets)
+        super(HikExportEditor, self).__init__(windowKey, uiFilepath, custom_widgets=custom_widgets)
+        
+        cg3dcasc.hik.load_hik()
         self.job_handlers = {}
         self.add_script_jobs()
         self.qrig_data_instance = cg3dcasc.QRigData()

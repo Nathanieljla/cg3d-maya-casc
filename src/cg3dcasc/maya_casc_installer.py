@@ -1371,7 +1371,7 @@ class MyInstaller(ModuleManager):
         if not self.nekki_dir.exists():
             #self.clean_folder(pathlib.Path(self.scripts_path))
             return False
-        
+
         self.my_data_dir = local_path.joinpath('CG_3D_Guru', 'Cascadeur')
         if not self.my_data_dir.exists():
             shutil.rmtree(self.my_data_dir, ignore_errors=True)
@@ -1399,10 +1399,9 @@ class MyInstaller(ModuleManager):
                 scripts_dir.joinpath('wingcarrier'), casc_site.joinpath('wingcarrier')
             )
             
-            pip_args = [r'--target={0}'.format(casc_site)]
-            Commandline.pip_install('cg3d-casc-core', pip_args=pip_args) #'https://github.com/Nathanieljla/cg3d-casc-core/archive/refs/heads/main.zip', pip_args=pip_args)
+            #pip_args = [r'--target={0}'.format(casc_site)]
+            #Commandline.pip_install('cg3d-casc-core', pip_args=pip_args) #'https://github.com/Nathanieljla/cg3d-casc-core/archive/refs/heads/main.zip', pip_args=pip_args)
 
-                
             #zf casc_site.exists():
                 #for child in casc_site.iterdir():
                     #dest = self.my_data_dir.joinpath(child.name)
@@ -1465,7 +1464,7 @@ class MyInstaller(ModuleManager):
             from cg3dguru.utils import menu_maker
             menu_maker.run(menu_namespace='cg3dcasc.menu')
             import cg3dcasc.userSetup
-            cg3dcasc.userSetup.open_maya_port()
+            cg3dcasc.userSetup.casc_setup()
             
         except Exception as e:
             import traceback       

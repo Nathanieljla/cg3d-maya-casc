@@ -8,8 +8,16 @@ class SourceType(Enum):
     CONTROL_RIG = 2
     
     
+def load_hik():
+    try:
+        pm.mel.eval('if (!`pluginInfo -q -l "mayaHIK"`){ loadPlugin "mayaHIK"; } if (!`pluginInfo -q -l "mayaCharacterization"`) { loadPlugin "mayaCharacterization"; } if (!`pluginInfo -q -l "OneClick"`){ loadPlugin "OneClick"; } hikToggleWidget();')
+    except:
+        pass
+    
+    
 def _get_hik_windows():
-    pm.mel.eval('if (!`pluginInfo -q -l "mayaHIK"`){ loadPlugin "mayaHIK"; } if (!`pluginInfo -q -l "mayaCharacterization"`) { loadPlugin "mayaCharacterization"; } if (!`pluginInfo -q -l "OneClick"`){ loadPlugin "OneClick"; } hikToggleWidget();')
+    load_hik()
+    #pm.mel.eval('if (!`pluginInfo -q -l "mayaHIK"`){ loadPlugin "mayaHIK"; } if (!`pluginInfo -q -l "mayaCharacterization"`) { loadPlugin "mayaCharacterization"; } if (!`pluginInfo -q -l "OneClick"`){ loadPlugin "OneClick"; } hikToggleWidget();')
 
     hik_options = pm.lsUI(l=True, type="optionMenuGrp")
     character_list = None

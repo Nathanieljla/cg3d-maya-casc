@@ -18,7 +18,8 @@ except:
 
 
 import cg3dguru.ui
-from . import exchange
+from . import common
+from . import server
 from .udata import *
 
 CLONE_PREFIX = 'CASC'
@@ -348,7 +349,7 @@ def _copy_per_vert(skin_proxy, skin_cluster_node, clone_pairing, originals, repl
 
 
 def _clone_meshes(meshes, mesh_parent, skinned_parent, clone_pairing):
-    mesh_cluster_mapping = exchange.get_mesh_cluster_mappings()
+    mesh_cluster_mapping = common.get_mesh_cluster_mappings()
 
     copy_method = preferences.CopyWeightType.SWAP
     print(f"Cloning weights via {copy_method} method.")
@@ -378,8 +379,12 @@ def _clone_meshes(meshes, mesh_parent, skinned_parent, clone_pairing):
             for cluster in mesh_cluster_mapping[source_shape]:
                 mi = pm.animation.skinCluster(cluster, maximumInfluences=True, query=True)
                 influences = pm.animation.skinCluster(cluster, influence=True, query=True)
-    
-                cloned_cluster = pm.animation.skinCluster(*influences, mesh_proxy, mi=mi, multi=True, tsb=True) #test
+
+                if int(cmds.about(version=True)) > 2023:
+                    cloned_cluster = pm.animation.skinCluster(*influences, mesh_proxy, mi=mi, multi=True, tsb=True)
+                else:
+                    cloned_cluster = pm.animation.skinCluster(*influences, mesh_proxy, mi=mi, tsb=True)
+                    
                 pm.copySkinWeights(ss=cluster, ds=cloned_cluster, noMirror=True,
                                    surfaceAssociation='closestPoint', influenceAssociation='closestJoint')
                 
@@ -393,18 +398,19 @@ def _clone_meshes(meshes, mesh_parent, skinned_parent, clone_pairing):
                 vertices = skinned_geometry.vtx[:]
                 prune = False
                 remove_originals = True
+                
+                #don't use match case here due to not working with Maya 2023
+                if copy_method == preferences.CopyWeightType.SWAP: #Mazu: 19.8838, Waitress: 4.5856,
+                    remove_originals = False
+                    _copy_swap(mesh_proxy, cloned_cluster, clone_pairing, originals, replacements)
 
-                match copy_method:
-                    case preferences.CopyWeightType.SWAP: #Mazu: 19.8838, Waitress: 4.5856,
-                        remove_originals = False
-                        _copy_swap(mesh_proxy, cloned_cluster, clone_pairing, originals, replacements)
+                elif copy_method == preferences.CopyWeightType.FLOOD: #Mazu: 158.3618, Waitress: 18.1239,
+                    prune = True
+                    _copy_flood(mesh_proxy, cloned_cluster, clone_pairing, originals, replacements, vertices)
+        
+                elif copy_method == preferences.CopyWeightType.PER_VERT: #Mazu: 138.2624, Waitress: 70.3756,
+                    _copy_per_vert(mesh_proxy, cloned_cluster, clone_pairing, originals, replacements)                
 
-                    case preferences.CopyWeightType.FLOOD: #Mazu: 158.3618, Waitress: 18.1239,
-                        prune = True
-                        _copy_flood(mesh_proxy, cloned_cluster, clone_pairing, originals, replacements, vertices)
-            
-                    case preferences.CopyWeightType.PER_VERT: #Mazu: 138.2624, Waitress: 70.3756,
-                        _copy_per_vert(mesh_proxy, cloned_cluster, clone_pairing, originals, replacements)
 
                 cloned_cluster.normalizeWeights.set(2)
                 if remove_originals:
@@ -413,7 +419,7 @@ def _clone_meshes(meshes, mesh_parent, skinned_parent, clone_pairing):
 
                 for influence in cloned_cluster.getInfluence():
                     pm.skinCluster(cloned_cluster, edit=True, lockWeights=False, influence=influence)
-                    
+
                 cloned_cluster.normalizeWeights.set(1)
                 if prune:
                     pm.animation.skinPercent(cloned_cluster, vertices, pruneWeights=0.005)
@@ -458,7 +464,7 @@ def convert_textures():
 
     roots = {item.getParent(-1) for item in pm.ls(sl=True)}
     branches = pm.listRelatives(list(roots), allDescendents=True)
-    textures = exchange.get_textures(branches)
+    textures = common.get_textures(branches)
     
     valid_extensions = {'jpg', 'jpeg', 'png'}
     for key, textures in textures.items():
@@ -484,8 +490,8 @@ def _derig_selection():
 
     start_progress_bar(status='Creating Proxy', maxValue=100)
 
-    results = exchange.get_skinned_data_sets(selection)
-    exchange.update_skinned_data_sets(*results)
+    results = common.get_skinned_data_sets(selection)
+    common.update_skinned_data_sets(*results)
     joints, meshes, skin_clusters, transforms = results
     
     if not joints and not meshes and not skin_clusters:
@@ -534,7 +540,6 @@ def _derig_selection():
     return True
 
 
-
 def constrain_proxy():
     import cg3dguru.udata
 
@@ -549,7 +554,7 @@ def constrain_proxy():
     
     elif len(joint_roots) > 2:
         #We have multiple proxies in the scene, so we need to do some extra work to find the right proxy
-        export_nodes = exchange.get_export_nodes()
+        export_nodes = common.get_export_nodes()
         pm.warning("add support for finding one of many proxy rigs")
 
     else:
@@ -562,7 +567,38 @@ def constrain_proxy():
         source = proxy.proxySource.get()
         if source:
             pm.parentConstraint(source, proxy, maintainOffset=maintain_offset)
+            
+                       
+def sync_casc_id():
+    selected_export_sets = common.get_selected_export_nodes()
+    success, casc_ids = server.send_and_listen("cg3dmaya.get_selected_ids()")
     
+    if not success:
+        pm.displayError("Couldn't establish communication with Cascadeur")
+        return
+    
+    if len(selected_export_sets) != 1 or len(casc_ids) != 1:
+        pm.displayError("Select exactly one export set in Maya and Cascadeur")
+        return
+    
+    title = 'Cascadeur Bridge'
+    message = "Warning: Syncing IDs should only be done if you understand the risks.\nSee documentation for more details.\nContinue?"
+    
+    result = pm.confirmDialog(
+        title=title,
+        message=message,
+        button=['Yes', 'Cancel'],
+        defaultButton='Yes',
+        cancelButton='Cancel',
+        dismissString='Closed'
+    )
+
+    if result == 'Yes':
+        data_prop = selected_export_sets[0].cscDataId
+        data_prop.unlock()
+        data_prop.set(casc_ids[0])
+        data_prop.lock()
+        pm.displayInfo("ID Synced")  
 
 
 def derig_selection():

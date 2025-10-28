@@ -6,7 +6,9 @@ PARAMS = {
 ORDER = [
     'quick_export',
     'update',
-    'send_to',
+    'add_to',
+    'connect',
+    'import',
     'editor',
     'utils',
     'preferences'

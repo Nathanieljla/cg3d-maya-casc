@@ -1,4 +1,5 @@
 
+DIVIDER = 'Export'
 
 PARAMS = {
     'label': 'Quick Export'

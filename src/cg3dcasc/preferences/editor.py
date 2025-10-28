@@ -5,7 +5,7 @@ import cg3dcasc.preferences
 class Cg3dCascPrefs(cg3dguru.ui.Window):
     def __init__(self): 
         uiFilepath = os.path.join(cg3dcasc.preferences.__path__[0], 'preferences.ui')
-        super(Cg3dCascPrefs, self).__init__('cg3dcasc_prefs', uiFilepath) #, custom_widgets = custom_widgets)
+        super(Cg3dCascPrefs, self).__init__('cg3dcasc_prefs', uiFilepath)
 
         self.prefs: cg3dcasc.preferences.core._PreferenceData = None
         self.ui.texture_options.hide()
@@ -29,7 +29,6 @@ class Cg3dCascPrefs(cg3dguru.ui.Window):
         self.ui.joint_scale.setChecked(self.prefs.derig_reset_joint_scale)
         self.ui.maintain_parent_offset.setChecked(self.prefs.derig_maintain_offset)
 
-        
     def save_prefs(self, *args, **kwargs):
         self.prefs.bake_animations = cg3dcasc.preferences.OptionEnum(self.ui.bake_choice.currentText())
         self.prefs.texture_conversion = cg3dcasc.preferences.TextureConversionType(self.ui.texture_choice.currentText())
