@@ -11,7 +11,7 @@ from . import hik
 
 import wingcarrier.pigeons
 import cg3dguru.udata
-import cg3dguru.animation.fbx
+#import cg3dguru.animation.fbx
 import cg3dguru.utils
 
 from .udata import *
@@ -19,6 +19,7 @@ from .udata import *
 #from . import command_port
 from . import server
 from . import common
+from . import fbx
 
 
 def import_from_casc():
@@ -75,7 +76,8 @@ def import_fbx():
             
             #Import the FBX data
             print('importing {}'.format(fbx_path))
-            cg3dguru.animation.fbx.import_fbx(fbx_path)
+            #cg3dguru.animation.fbx.import_fbx(fbx_path)
+            fbx.import_fbx(fbx_path)
             current_roots = set(pm.ls(assemblies=True))
 
             #should we always update with the latest roots?

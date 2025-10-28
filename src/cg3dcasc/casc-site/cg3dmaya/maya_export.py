@@ -39,10 +39,10 @@ def _export(scene, export_sets):
         scene.warning("Maya Bridge: Nothing to export!")
         return      
 
-    up_axis = common.get_maya_coord_system()
-    if up_axis is None:
-        print("Couldn't get Maya's Up Axis. Is Maya Running? Export Failed")
-        return
+    #up_axis = common.get_maya_coord_system()
+    #if up_axis is None:
+        #print("Couldn't get Maya's Up Axis. Is Maya Running? Export Failed")
+        #return
         
     for export_set in export_sets:
         root_beh = export_set.get_behaviour_by_name(common.MAYA_ROOTS)

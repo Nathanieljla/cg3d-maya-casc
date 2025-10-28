@@ -183,11 +183,10 @@ def _import_maya(new_scene, import_filter: fbx.FbxFilterType):
 
         files[name][ext.lower()] = str(child)
         
-        
-    up_axis = common.get_maya_coord_system()
-    if up_axis is None:
-        print("Couldn't get Maya's Up Axis. Is Maya Running? Export Failed")
-        return
+    #up_axis = common.get_maya_coord_system()
+    #if up_axis is None:
+        #print("Couldn't get Maya's Up Axis. Is Maya Running? Export Failed")
+        #return
 
     import_rig = ''
     for key, item in files.items():

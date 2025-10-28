@@ -10,7 +10,8 @@ from . import hik
 
 import wingcarrier.pigeons
 import cg3dguru.udata
-import cg3dguru.animation.fbx
+#import cg3dguru.animation.fbx as fbx
+
 import cg3dguru.utils
 
 from cg3dcasc import preferences
@@ -19,6 +20,7 @@ from .udata import *
 from . import server
 from . import common
 from . import casc_qrt
+from . import fbx
 
 
 def get_root_parent(input_transform):
@@ -121,7 +123,8 @@ def _export_data(export_data, export_folder: pathlib.Path, export_rig: bool, exp
             result = pm.confirmDialog(title='Export Animations', message='Bake Animation?', messageAlign='center', button=['Yes', 'No'], defaultButton='Yes', cancelButton='No', dismissString='No')
             bake = result == 'Yes'
         
-        cg3dguru.animation.fbx.export(fbx_file_path, bake_animations=bake)
+        #cg3dguru.animation.fbx.export(fbx_file_path, bake_animations=bake)
+        fbx.export(fbx_file_path, bake_animations=bake)
         
         pm.select(user_selection, replace=True)
         
