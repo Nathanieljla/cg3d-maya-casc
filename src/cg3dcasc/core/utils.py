@@ -20,6 +20,8 @@ except:
 import cg3dguru.ui
 from . import common
 from . import server
+from . import materials
+from . import hik
 from .udata import *
 
 CLONE_PREFIX = 'CASC'
@@ -464,9 +466,9 @@ def convert_textures():
 
     roots = {item.getParent(-1) for item in pm.ls(sl=True)}
     branches = pm.listRelatives(list(roots), allDescendents=True)
-    textures = common.get_textures(branches)
+    textures = materials.get_textures(branches)
     
-    valid_extensions = {'jpg', 'jpeg', 'png'}
+    valid_extensions = {'.jpg', '.jpeg', '.png'}
     for key, textures in textures.items():
         for texture in textures:
             tpath = Path(texture)
@@ -617,5 +619,73 @@ def derig_selection():
     if _derig_selection():
         name = f"{CLONE_PREFIX}:{CLONE_PREFIX}_CSC_EXPORT"
         create_export_set(name, auto_add_selected=True)
+        
 
+def hik_def_from_proxy():
+    def _get_connected_attr_name(source_node, destination_node_name):
+        try:
+            source_attr = source_node.Character
+        except AttributeError:
+            return None
+    
+        # List connections from the source attribute, getting the destination plugs (c=True, d=True, s=False)
+        # The 'connections' (c) flag returns a 2D array of attribute pairs [sourceAttr, destinationAttr]
+        connections = pm.listConnections(source_attr, connections=True, destination=True, source=False, plugs=True)
+    
+        if connections:
+            # connections is a list of [source, destination] pairs.
+            # We look through the destination plugs to find the one belonging to our destination node.
+            for source_plug, dest_plug in connections:
+                if dest_plug.nodeName() == destination_node_name:
+                    # Return just the attribute name (e.g., 'customAttr')
+                    return dest_plug.attrName()
+    
+        return None    
+
+    active_character_name = hik.get_current_character()
+    if active_character_name == 'None':
+        pm.warning("Please select a character from the HIK window. Creation Skipped.")
+        return
+    
+    active_character_name = active_character_name.split("(")[0] #remove any potential "(custom rig)" suffix
+    node_index = hik.get_node_index_mapping()
+    all_joints = pm.ls(type='joint')
+    proxy_data = cg3dguru.udata.Utils.get_nodes_with_data(all_joints, data_class=ProxyData)
+
+    if not proxy_data:
+        pm.warning("Couldn't find any proxy joints! Creation Skipped.")
+        return
+
+    source_joint_idx = {}
+    for proxy in proxy_data:
+        source_joint = proxy.proxySource.get()
+        if not source_joint:
+            continue
+
+        attr_name = _get_connected_attr_name(proxy, active_character_name)
+        if not attr_name or attr_name not in node_index:
+            continue
+
+        source_joint_idx[source_joint.name()] = node_index[attr_name]
+
+    if not source_joint_idx:
+        pm.warning("Couldn't find any proxy joints from the active HIK Character. Creation Skipped.")
+        return
+        
+    current_characters = set(pm.ls(type='HIKCharacterNode'))
+    pm.mel.eval('hikCreateDefinition')
+    new_characters = [i for i in pm.ls(type='HIKCharacterNode') if i not in current_characters]
+    if len(new_characters) != 1:
+        pm.error("Failed to creat new Character definition.")
+        return
+    
+    target_def = new_characters[0]
+    target_name = target_def.name()
+
+    for joint_name, idx in source_joint_idx.items():
+        mel_cmd = f'setCharacterObject("{joint_name}", "{target_name}", {idx}, 0)'
+        pm.mel.eval(mel_cmd)
+        
+    if pm.mel.eval('workspaceControl -query -raise hikCharacterControlsDock') != 1:
+        pm.mel.eval("hikToggleWidget")
 

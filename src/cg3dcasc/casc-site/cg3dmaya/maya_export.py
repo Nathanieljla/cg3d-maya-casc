@@ -59,9 +59,9 @@ def _export(scene, export_sets):
         if maya_id:
             maya_id = maya_id[0]
             fbx_name = '{}.{}.fbx'.format(root_beh.object.name, maya_id.get())
-            
+            fbx_name = fbx_name.replace(":", "_")
             export_path = str(temp_dir.joinpath(fbx_name))
-            
+
             print("Exporting to {}".format(fbx_name))
             
             bake_anim_data = maya_beh.datasWithSameNames.get_by_name(common.BAKE_ANIMATION)

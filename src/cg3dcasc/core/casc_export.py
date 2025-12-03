@@ -21,6 +21,7 @@ from . import server
 from . import common
 from . import casc_qrt
 from . import fbx
+from . import materials
 
 
 def get_root_parent(input_transform):
@@ -168,77 +169,6 @@ def _build_default_set():
     return export_node
 
 
-def get_textures(objs, export_nodes=[]):
-    materials = {}
-
-    def _get_best_file_node(color_input):
-        nonlocal export_nodes
-        matches = []
-        for texture in color_input:
-            for export_node in export_nodes:
-                if texture in export_node.members(True):
-                    matches.append(texture)
-
-        if matches:
-            return matches
-
-        #No matches were found so just return the original input
-        return color_input
-    
-    
-    shapes = pm.listRelatives(objs, s=True)
-    shapes += pm.ls(objs, shapes=True)
-    for shape in shapes:
-        sgs = pm.listConnections(shape, type='shadingEngine' )
-        for sg in sgs:
-            shaders = pm.listConnections("%s.surfaceShader" % sg, s=True)
-            for shader in shaders:
-                color_attr = None
-                if hasattr(shader, 'color'):
-                    color_attr = getattr(shader, 'color')
-                elif hasattr(shader, 'diffuse'):
-                    color_attr = getattr(shader, 'diffuse')
-                elif hasattr(shader, 'baseColor'):
-                    color_attr = getattr(shader, 'baseColor')
-                    
-                if not color_attr:
-                    continue
-                
-                color_input = pm.listConnections(color_attr, s=True, d=False)
-                if not color_input:
-                    continue
-            
-                color_input = pm.findType(color_input, type='file', forward=False,deep =True)
-                if not color_input:
-                    continue
-                
-                if len(color_input) > 1:
-                    color_input = _get_best_file_node(color_input)
-                    
-                if len(color_input) != 1:
-                    pm.warning(f"Found multiple textures for '{color_attr}' skipping texture. Note: You can add the preferred file node to your export set to fix this.")
-                    continue
-
-                color_input = pm.PyNode(color_input[0])
-                filepath = color_input.fileTextureName.get()
-                file = pathlib.Path(filepath)
-                if file.suffix.lower() != '.png':
-                    png = file.parent.joinpath(f"{file.stem}.png")
-                    if png.exists():
-
-                        filepath = str(png).replace("\\", "/")
-
-                        
-                if filepath:
-                    materials.setdefault(shape.getParent().name(), set()).add(filepath)
-                    
-
-    for key, value in materials.items():
-        materials[key] = list(value)
-
-    return materials
-
-
 def cascadeur_available():
     #start_time = time.time()
     result = wingcarrier.pigeons.CascadeurPigeon().can_dispatch()
@@ -286,7 +216,7 @@ def export(export_set=None, export_rig=False, cmd='', textures=True, only_textur
         print("Exporting textures")
         for root in export_roots:
             branch = pm.listRelatives(root, allDescendents=True)
-            results = get_textures(branch, export_nodes)
+            results = materials.get_textures(branch, export_nodes)
             texture_mappings.update(results)
             
         print(texture_mappings)
