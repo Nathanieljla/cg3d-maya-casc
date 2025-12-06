@@ -2,6 +2,9 @@ import pymel.core as pm
 from enum import Enum
 
 
+_node_index = {}
+
+
 class SourceType(Enum):
     NONE = 0
     STANCE = 1
@@ -144,6 +147,18 @@ def set_character_source(character, source: SourceType):
         current_source = pm.optionMenuGrp(source_list, query=True, value=True)
         if current_source != source_name:
             _set_list(source_list, source_name, 'hikUpdateCurrentSourceFromUI()')
+            
+            
+
+def get_node_index_mapping():
+    global _node_index
+    if not _node_index:
+        for idx in range(0, 250): #right now HIK goes to 211
+            name = pm.mel.eval(f'GetHIKNodeName {idx}')
+            if name:
+                _node_index[name] = idx
+                
+    return _node_index.copy()
 
 
     

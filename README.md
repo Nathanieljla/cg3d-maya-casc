@@ -38,6 +38,30 @@ This will automatically install all the dependencies without requiring admin pri
  (you can say 'yes' to the question)
 
  # Revisions
+ ### 1.6.1
+ Fixed bug with converting textures not working
+ 
+ Fixed bug where exports from Cascadeur would fail if export set included a namespace
+ 
+ Added a command to create a new HIK character definition from a proxy HIK character
+ 
+ 
+ ### 1.6.0
+ Cascadeur now includes confirmation boxes, when there are multiple conflicts on how to send data to maya
+ 
+ Cascadeur now has options for creating and managing export sets
+ 
+ Tools in Maya and Cascadeur for syncing Export IDs between applications
+ 
+ Suppport for multiple running instances of Maya
+ 
+ Sped up Communication from Maya to Cascadeur 
+ 
+ HIK Characters can now be associated with existing export sets
+ 
+ Fixed major bug in 1.5.x which could cause new characters to be added to Maya instead of updating existing data
+ 
+ 
  ### 1.5.0
  New tools for cloning a rigged character to act as a proxy with Cascadeur
  
