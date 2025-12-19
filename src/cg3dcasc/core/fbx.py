@@ -46,7 +46,7 @@ def set_export_options(export_type, bake_animations=True, remove_namespaces=Fals
     
 
 
-def export(filename, export_type=EXPORT_ANIM_RIG, bake_animations=True, remove_namespaces=False):
+def export(filename, export_type=EXPORT_ANIM_RIG, bake_animations=True, remove_namespaces=False, include_children=True):
     ##https://help.autodesk.com/view/MAYAUL/2022/ENU/index.html?guid=GUID-699CDF74-3D64-44B0-967E-7427DF800290
     start = int(pm.animation.playbackOptions(query=True, animationStartTime=True))
     end = int(pm.animation.playbackOptions(query=True, animationEndTime=True))
@@ -68,6 +68,8 @@ def export(filename, export_type=EXPORT_ANIM_RIG, bake_animations=True, remove_n
     pm.mel.FBXExportShapes(v=True)
     
     pm.mel.FBXExportConstraints(v=False)
+    
+    pm.mel.FBXExportIncludeChildren(v=include_children)
     pm.mel.FBXExportInputConnections(v=False)
     #pm.mel.FBXExportUseSceneName(v=True)   //This uses the maya filename for the clip being exported
     pm.mel.FBXExportCameras(v=False)

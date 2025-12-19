@@ -66,12 +66,14 @@ def get_exportable_content(export_data):
     skinClusters. Then use these skinClusters to find a list of meshes and
     joints to include for export.    
     """
+
+    
+    joints, meshes, skin_clusters, transforms =\
+        common.get_skinned_data_sets(export_data.node().flattened())    
     
     if not export_data.dynamicSet.get():
-        return set(export_data.node().flattened())
+        return (joints, meshes, skin_clusters, transforms)
            
-    joints, meshes, skin_clusters, transforms =\
-        common.get_skinned_data_sets(export_data.node().flattened())
 
     #We need to combine all joints and skinned meshes into a set of
     #skin_clusters, which can then be used to build a complete list
@@ -92,7 +94,8 @@ def _export_data(export_data, export_folder: pathlib.Path, export_rig: bool, exp
     #still useful as it will still returns a list of exportable_content
     qrig_data = QRigData.get_data(export_data.node())
     character_node = common.get_character_node(export_data)
-    joints, meshes, skin_clusters, transforms =  get_exportable_content(export_data)
+    joints, meshes, skin_clusters, transforms = get_exportable_content(export_data)
+    dynamic = export_data.dynamicSet.get()
     
     root_transforms = set()
     add_transform_roots(joints, root_transforms)
@@ -107,26 +110,30 @@ def _export_data(export_data, export_folder: pathlib.Path, export_rig: bool, exp
         if export_rig and character_node:
             current_source = hik.get_character_source(character_node)
             hik.set_character_source(character_node, hik.SourceType.STANCE)
-        
+
         user_selection = pm.ls(sl=True)
-        pm.select(list(root_transforms), replace=True)
-        
+        if dynamic:
+            pm.select(list(root_transforms), replace=True)
+        else:
+            pm.select(list(transforms), replace=True)
+            pm.select(list(skin_clusters), add=True)
+            pm.select(list(meshes), add=True)
+            pm.select(list(joints), add=True)
+            
         file_id = export_data.cscDataId.get()
         node_name = export_data.node().name().split(':')[-1]
         filename = '{}.{}.fbx'.format(node_name, file_id)
         fbx_file_path = export_folder.joinpath(filename)
         print('FBX file: {}'.format(fbx_file_path))
         
-        
         prefs = preferences.get()
         bake = prefs.bake_animations == preferences.OptionEnum.ALWAYS
         if prefs.bake_animations == preferences.OptionEnum.ASK:
             result = pm.confirmDialog(title='Export Animations', message='Bake Animation?', messageAlign='center', button=['Yes', 'No'], defaultButton='Yes', cancelButton='No', dismissString='No')
             bake = result == 'Yes'
-        
-        #cg3dguru.animation.fbx.export(fbx_file_path, bake_animations=bake)
-        fbx.export(fbx_file_path, bake_animations=bake)
-        
+            
+        fbx.export(fbx_file_path, bake_animations=bake, include_children=dynamic)
+
         pm.select(user_selection, replace=True)
         
         if export_rig and character_node:
