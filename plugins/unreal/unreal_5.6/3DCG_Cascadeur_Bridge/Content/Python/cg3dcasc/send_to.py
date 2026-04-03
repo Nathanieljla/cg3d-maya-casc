@@ -53,8 +53,10 @@ def create_new_config(selected_asset):
     if new_asset:
         # Set properties on the new instance
         new_asset.set_editor_property("character", selected_asset)
-        new_uuid = uuid.uuid4().hex  # Generate string without dashes
-        new_asset.set_editor_property("bridge_id", new_uuid)
+        
+        # Construct an Unreal Guid struct automatically
+        new_guid = unreal.Guid()
+        new_asset.set_editor_property("bridge_id", new_guid)
         
         # Save the new asset
         unreal.EditorAssetLibrary.save_loaded_asset(new_asset)
@@ -151,9 +153,14 @@ def run():
             save_loc = core.get_save_location()
             guid = bridge_config.get_editor_property("bridge_id")
             if not guid:
-                guid = "unknown"
-                
-            file_name = f"material_data.{guid}.json"
+                guid_str = "unknown"
+            else:
+                try:
+                    guid_str = guid.to_string()
+                except Exception:
+                    guid_str = "unknown"
+                    
+            file_name = f"material_data.{guid_str}.json"
             full_path = os.path.join(save_loc, file_name)
             
             with open(full_path, "w", encoding="utf-8") as f:
