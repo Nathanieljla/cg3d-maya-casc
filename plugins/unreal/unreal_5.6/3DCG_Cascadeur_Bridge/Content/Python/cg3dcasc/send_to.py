@@ -153,7 +153,7 @@ def run():
         import subprocess
 
             
-        mat_data = core.MaterialData.from_skel_mesh(character)
+        mat_data = core.UnrealMaterialData.from_skel_mesh(character)
         if mat_data:
             save_loc = core.get_save_location()
             guid = bridge_config.get_editor_property("bridge_id")

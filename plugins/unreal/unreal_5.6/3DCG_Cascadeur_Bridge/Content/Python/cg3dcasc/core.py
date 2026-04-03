@@ -3,7 +3,7 @@ import json
 import os
 import sys
 
-class MaterialData:
+class UnrealMaterialData:
     """
     Utility class to extract and store material logic from a skeletal mesh,
     including traversing down material graph attributes (BaseColor, Roughness, etc.)
