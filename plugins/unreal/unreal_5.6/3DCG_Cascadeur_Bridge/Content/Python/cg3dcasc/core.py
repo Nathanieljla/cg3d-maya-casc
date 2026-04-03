@@ -3,33 +3,55 @@ import json
 import os
 import sys
 
-class UnrealMaterialData:
+try:
+    from cg3dcasc.material_data import (
+        BaseMaterialData,
+        MaterialConverter,
+        FilamentMaterialData,
+    )
+except ImportError:
+    from material_data import (
+        BaseMaterialData,
+        MaterialConverter,
+        FilamentMaterialData,
+    )
+
+class UnrealMaterialData(BaseMaterialData):
     """
     Utility class to extract and store material logic from a skeletal mesh,
     including traversing down material graph attributes (BaseColor, Roughness, etc.)
     and correctly querying localized parameters for Material Instances.
     """
-    def __init__(self, mesh_name):
-        self.mesh_name = mesh_name
-        self.materials = {}
+    def __init__(self, mesh_name=""):
+        super().__init__(mesh_name)
 
     @classmethod
-    def from_skel_mesh(cls, skel_mesh):
-        if not skel_mesh or not isinstance(skel_mesh, unreal.SkeletalMesh):
+    def from_mesh(cls, mesh_obj):
+        """Parse materials from an Unreal ``SkeletalMesh``.
+
+        This is the ``BaseMaterialData`` interface implementation.  The
+        convenience alias ``from_skel_mesh`` also calls this method.
+        """
+        if not mesh_obj or not isinstance(mesh_obj, unreal.SkeletalMesh):
             unreal.log_error("Invalid skeletal mesh provided to MaterialData")
             return None
             
-        data = cls(skel_mesh.get_name())
+        data = cls(mesh_obj.get_name())
         
         # In skeletal meshes, materials are stored in the 'materials' array 
         # (list of SkeletalMaterial objects)
-        for skel_mat in skel_mesh.materials:
+        for skel_mat in mesh_obj.materials:
             mat_interface = skel_mat.material_interface
             if mat_interface:
                 mat_name = mat_interface.get_name()
                 data.materials[mat_name] = cls._extract_attributes(mat_interface)
                 
         return data
+
+    @classmethod
+    def from_skel_mesh(cls, skel_mesh):
+        """Convenience alias for ``from_mesh``."""
+        return cls.from_mesh(skel_mesh)
 
     @classmethod
     def _extract_attributes(cls, material_interface):
@@ -172,12 +194,7 @@ class UnrealMaterialData:
             return result
         return None
 
-    def to_json(self):
-        """Returns the collected material attributes data as formatted json."""
-        return json.dumps({
-            "mesh_name": self.mesh_name,
-            "materials": self.materials
-        }, indent=4)
+    # to_json() is inherited from BaseMaterialData
 
 def get_save_location():
     """
@@ -207,3 +224,13 @@ def get_save_location():
                 os.makedirs(save_dir)
                 
     return save_dir
+
+
+# ---------------------------------------------------------------------------
+# Register Unreal → Filament converter
+# ---------------------------------------------------------------------------
+MaterialConverter.register(
+    UnrealMaterialData,
+    FilamentMaterialData,
+    {k: v for k, v in FilamentMaterialData.CANONICAL_TO_FILAMENT.items()},
+)
