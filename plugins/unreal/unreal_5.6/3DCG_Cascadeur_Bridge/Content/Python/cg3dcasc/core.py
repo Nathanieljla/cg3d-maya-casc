@@ -60,10 +60,20 @@ class MaterialData:
             
             # Formatting as requested: list of textures if available. Else single constant if available.
             if textures:
-                attributes[attr_name] = list(textures)
+                attributes[attr_name] = {
+                    "type": "texture",
+                    "value": list(textures)
+                }
             elif constants:
-                attributes[attr_name] = constants[0]
-                
+                val = constants[0]
+                val_type = "scalar"
+                if isinstance(val, list):
+                    val_type = "vector" if len(val) >= 2 else "scalar"
+                    
+                attributes[attr_name] = {
+                    "type": val_type,
+                    "value": val
+                }
         return attributes
 
     @classmethod
@@ -91,7 +101,7 @@ class MaterialData:
         # 2. Or is it a hardcoded Texture sample?
         elif "Texture" in classname and hasattr(node, 'texture'):
             if node.texture:
-                textures.add(node.texture.get_path_name())
+                textures.add(unreal.SystemLibrary.get_system_path(node.texture))
                 
         # 3. Or a hardcoded Constant?
         elif "Constant4Vector" in classname and hasattr(node, 'constant'):
@@ -146,14 +156,20 @@ class MaterialData:
 
     @classmethod
     def _get_texture_val(cls, mat_inst, node):
-        if isinstance(mat_inst, unreal.MaterialInstance):
-            try:
+        try:
+            if isinstance(mat_inst, unreal.MaterialInstance):
                 tex = unreal.MaterialEditingLibrary.get_material_instance_texture_parameter_value(mat_inst, node.parameter_name)
-                if tex: return tex.get_path_name()
-            except Exception:
-                pass
+                if tex: 
+                    result = unreal.SystemLibrary.get_system_path(tex)
+                    print(result)
+                    return result
+        except Exception:
+            pass
+            
         if node.texture:
-            return node.texture.get_path_name()
+            result = unreal.SystemLibrary.get_system_path(node.texture)
+            print(result)
+            return result
         return None
 
     def to_json(self):

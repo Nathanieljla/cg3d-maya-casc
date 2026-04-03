@@ -1,6 +1,14 @@
 import unreal
 import uuid
 
+try:
+    from cg3dcasc import core
+except ImportError:
+    import core
+
+import importlib
+importlib.reload(core)
+
 def get_selected():
     """
     Get the currently selected asset in the Content Browser.
@@ -143,10 +151,7 @@ def run():
         import os
         import sys
         import subprocess
-        try:
-            from cg3dcasc import core
-        except ImportError:
-            import core
+
             
         mat_data = core.MaterialData.from_skel_mesh(character)
         if mat_data:
