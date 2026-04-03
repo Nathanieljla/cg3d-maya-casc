@@ -128,11 +128,43 @@ def process_selection(selected_asset):
 def run():
     selected = get_selected()
     if selected is None:
-        return False
+        return
 
     bridge_config = process_selection(selected)
     if bridge_config is None:
-        return False
+        return
     
     print(bridge_config.get_path_name())
+    
+    character = bridge_config.get_editor_property("character")
+    if character:
+        import os
+        import sys
+        import subprocess
+        try:
+            from cg3dcasc import core
+        except ImportError:
+            import core
+            
+        mat_data = core.MaterialData.from_skel_mesh(character)
+        if mat_data:
+            save_loc = core.get_save_location()
+            guid = bridge_config.get_editor_property("bridge_id")
+            if not guid:
+                guid = "unknown"
+                
+            file_name = f"material_data.{guid}.json"
+            full_path = os.path.join(save_loc, file_name)
+            
+            with open(full_path, "w", encoding="utf-8") as f:
+                f.write(mat_data.to_json())
+                
+            print(f"Saved material data to: {full_path}")
+            
+            # Open OS window to this location
+            if sys.platform == "win32":
+                subprocess.Popen(f'explorer /select,"{os.path.normpath(full_path)}"')
+            elif sys.platform == "darwin":
+                subprocess.Popen(['open', '-R', full_path])
+                
     return True

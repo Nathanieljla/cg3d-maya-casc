@@ -1,5 +1,7 @@
 import unreal
 import json
+import os
+import sys
 
 class MaterialData:
     """
@@ -160,3 +162,32 @@ class MaterialData:
             "mesh_name": self.mesh_name,
             "materials": self.materials
         }, indent=4)
+
+def get_save_location():
+    """
+    Returns a platform-specific path where the application has write permissions
+    (for saving JSON files without requiring admin rights).
+    """
+    if sys.platform == "win32":
+        # Windows: %LOCALAPPDATA%
+        base_dir = os.environ.get("LOCALAPPDATA", os.path.expanduser("~\\AppData\\Local"))
+    elif sys.platform == "darwin":
+        # macOS: ~/Library/Application Support
+        base_dir = os.path.expanduser("~/Library/Application Support")
+    else:
+        # Linux / Fallback
+        base_dir = os.path.expanduser("~")
+        
+    save_dir = os.path.join(base_dir, "3DCG_Cascadeur_Bridge")
+    
+    if not os.path.exists(save_dir):
+        try:
+            os.makedirs(save_dir)
+        except Exception:
+            # Fallback to standard temp directory if we fail to create the folder
+            import tempfile
+            save_dir = os.path.join(tempfile.gettempdir(), "3DCG_Cascadeur_Bridge")
+            if not os.path.exists(save_dir):
+                os.makedirs(save_dir)
+                
+    return save_dir
