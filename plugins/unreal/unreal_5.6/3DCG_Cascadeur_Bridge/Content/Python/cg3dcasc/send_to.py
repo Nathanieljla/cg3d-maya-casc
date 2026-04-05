@@ -1,5 +1,4 @@
 import unreal
-import uuid
 
 try:
     from cg3dcasc import core
@@ -62,8 +61,8 @@ def create_new_config(selected_asset):
         # Set properties on the new instance
         new_asset.set_editor_property("character", selected_asset)
         
-        # Construct an Unreal Guid struct automatically
-        new_guid = unreal.Guid()
+        # FGuid::NewGuid() exposed to Python as unreal.Guid.new_guid()
+        new_guid = unreal.GuidLibrary.new_guid()
         new_asset.set_editor_property("bridge_id", new_guid)
         
         # Save the new asset
