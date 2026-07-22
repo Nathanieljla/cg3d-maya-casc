@@ -85,16 +85,18 @@ class CascExportData(cg3dguru.udata.BaseData):
     will be exported (as well as the meshes they deform).
     """
     
+    
     @classmethod
     def get_class_version(cls):
-        return (0, 1, 0)    
+        return (0, 2, 0)    
     
     @staticmethod
     def get_attributes():
         attrs = [
             cg3dguru.udata.create_attr('cscDataId', 'string'),
             cg3dguru.udata.create_attr('dynamicSet', 'bool'),
-             cg3dguru.udata.create_attr('textureLocation', 'string')
+            cg3dguru.udata.create_attr('textureLocation', 'string'),
+            #cg3dguru.udata.create_attr('export_version', 'enum',enumName='0_1_0:Latest', defaultValue='Latest', keyable=False)
         ]
         
         return attrs
@@ -109,4 +111,4 @@ class CascExportData(cg3dguru.udata.BaseData):
         
     @classmethod
     def pre_update_version(cls, old_data, old_version_number):
-        pass
+        print(1)
