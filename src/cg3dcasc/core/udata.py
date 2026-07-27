@@ -1,6 +1,8 @@
 
 import uuid
 
+import pymel.core as pm
+
 import cg3dguru.udata
 
 
@@ -114,6 +116,33 @@ class CascExportData(cg3dguru.udata.BaseData):
         ]
 
         return attrs
+
+
+    @classmethod
+    def get_export_version(cls, data):
+        """Returns the export_version index for the given data block.
+
+        Args:
+            data (pymel.general.Attr) : a CascExportData data block.
+        """
+        node = data.node()
+        if not pm.hasAttr(node, 'export_version'):
+            #0.1.0 data that hasn't been version updated yet. Referenced
+            #nodes can't be updated at all, so they stay in this state.
+            return cls.LEGACY_0_1_0
+
+        return node.attr('export_version').get(asString=False)
+
+
+    @classmethod
+    def uses_legacy_export(cls, data):
+        """Should the pre 0.2.0 export logic be used for this data block?
+
+        Anything that isn't explicitly the latest version falls back to the
+        old export logic, as that's the safe direction.
+        """
+        return cls.get_export_version(data) != cls.LATEST
+
 
     @classmethod
     def post_create(cls, data):
