@@ -39,7 +39,67 @@ def add_transform_roots(transform_list, root_set):
         root_parent = get_root_parent(dag)
         if root_parent not in root_set:
             root_set.add(root_parent)
-            
+
+
+def get_export_branches(root_transforms, *content_sets):
+    """Return the nodes needed to export the given content from its roots
+
+    Every node that is an ancestor of, is, or is a descendant of the content
+    is kept. Branches under the roots that lead to no content at all get
+    trimmed out. Selecting the result lets the FBX exporter run with
+    include-children turned off, so rig controls and unrelated geometry stay
+    out of the file.
+
+    NOTE: the content sets must only contain DAG nodes. Don't pass in
+    skin_clusters, as they aren't part of the DAG hierarchy.
+
+    Args:
+        root_transforms (set) : the top level parent of each content item.
+        *content_sets : the joint, mesh and transform sets to keep.
+
+    Returns:
+        set : the transforms and shapes needed to export the content.
+    """
+    content = set()
+    for content_set in content_sets:
+        content.update(content_set)
+
+    if not content:
+        return set()
+
+    branch = set(content)
+
+    #ancestors: walk up from each item to its root. Branches that don't lead
+    #to content never get walked, which is what trims them.
+    for node in content:
+        current = node.getParent()
+        while current is not None and current not in branch:
+            branch.add(current)
+
+            #Every root_transform is parentless by construction, so this is
+            #really just an early out. It's here so the roots read as an
+            #explicit boundary.
+            if current in root_transforms:
+                break
+
+            current = current.getParent()
+
+    #descendants: anything under our content comes along for the ride, so a
+    #skeleton stays whole below the joints that are actually skinned. Mesh
+    #content is a shape node, which has no children of its own, so seed the
+    #walk with its transform instead.
+    seeds = set()
+    for node in content:
+        if isinstance(node, pm.nodetypes.Shape):
+            seeds.add( node.getParent() )
+        else:
+            seeds.add(node)
+
+    branch.update( pm.listRelatives(list(seeds), allDescendents=True) or [] )
+
+    return branch
+
+
 
 
 def node_type_exportable(node):
@@ -89,18 +149,31 @@ def get_exportable_content(export_data):
 
     
 
-def _export_data(export_data, export_folder: pathlib.Path, export_rig: bool, export_fbx: bool):    
+def _export_data(export_data, export_folder: pathlib.Path, export_rig: bool, export_fbx: bool):
     #When export_fbx and export_rig are both false then this function is
     #still useful as it will still returns a list of exportable_content
     qrig_data = QRigData.get_data(export_data.node())
     character_node = common.get_character_node(export_data)
     joints, meshes, skin_clusters, transforms = get_exportable_content(export_data)
     dynamic = export_data.dynamicSet.get()
-    
+    legacy = CascExportData.uses_legacy_export(export_data)
+
+    file_id = export_data.cscDataId.get()
+    node_name = export_data.node().name().split(':')[-1]
+
     root_transforms = set()
     add_transform_roots(joints, root_transforms)
     add_transform_roots(meshes, root_transforms)
-    add_transform_roots(transforms, root_transforms)    
+    add_transform_roots(transforms, root_transforms)
+
+    #This has to happen outside of the export_fbx block below, because
+    #update_textures() runs this function with export_fbx off and still
+    #needs to know what's being trimmed.
+    if dynamic and not legacy:
+        #0.2.0 : trim any branch that doesn't lead to exportable content
+        export_content = get_export_branches(root_transforms, joints, meshes, transforms)
+    else:
+        export_content = root_transforms
 
     if export_fbx:
         pm.mel.eval('if (!`pluginInfo -q -l "fbxmaya"`){ loadPlugin "fbxmaya"; }')
@@ -113,15 +186,15 @@ def _export_data(export_data, export_folder: pathlib.Path, export_rig: bool, exp
 
         user_selection = pm.ls(sl=True)
         if dynamic:
-            pm.select(list(root_transforms), replace=True)
+            #for legacy data export_content is the root transforms, which is
+            #exactly what this used to select.
+            pm.select(list(export_content), replace=True)
         else:
             pm.select(list(transforms), replace=True)
             pm.select(list(skin_clusters), add=True)
             pm.select(list(meshes), add=True)
             pm.select(list(joints), add=True)
-            
-        file_id = export_data.cscDataId.get()
-        node_name = export_data.node().name().split(':')[-1]
+
         filename = '{}.{}.fbx'.format(node_name, file_id)
         fbx_file_path = export_folder.joinpath(filename)
         print('FBX file: {}'.format(fbx_file_path))
@@ -132,7 +205,10 @@ def _export_data(export_data, export_folder: pathlib.Path, export_rig: bool, exp
             result = pm.confirmDialog(title='Export Animations', message='Bake Animation?', messageAlign='center', button=['Yes', 'No'], defaultButton='Yes', cancelButton='No', dismissString='No')
             bake = result == 'Yes'
             
-        fbx.export(fbx_file_path, bake_animations=bake, include_children=dynamic)
+        #0.2.0 selects the whole trimmed branch, so the exporter doesn't need
+        #to pull in children of its own.
+        fbx.export(fbx_file_path, bake_animations=bake,
+                   include_children = dynamic and legacy)
 
         pm.select(user_selection, replace=True)
         
@@ -144,9 +220,22 @@ def _export_data(export_data, export_folder: pathlib.Path, export_rig: bool, exp
         filename = '{}.{}.qrigcasc'.format(node_name, file_id)
         qrig_file_path = export_folder.joinpath(filename)
         casc_qrt.export_qrig_file(character_node, qrig_data, qrig_file_path)
-        
-        
-    return root_transforms
+
+    #For legacy and non-dynamic data, textures come off the whole root trees,
+    #which is what actually gets exported. For 0.2.0 the trimmed branch is
+    #already the complete list.
+    if export_content is root_transforms:
+        texture_nodes = set(root_transforms)
+        if root_transforms:
+            #NOTE: listRelatives() falls back to the active selection when
+            #it's handed nothing, so the emptiness check isn't optional.
+            texture_nodes.update(
+                pm.listRelatives(list(root_transforms), allDescendents=True) or []
+            )
+    else:
+        texture_nodes = export_content
+
+    return texture_nodes
 
 
 def _build_default_set():
@@ -211,21 +300,22 @@ def export(export_set=None, export_rig=False, cmd='', textures=True, only_textur
                 pm.confirmDialog(message="Nothing was found to export. Select some items to export and try again.", button=['Okay'])
                 return False                
              
-    #export our data 
-    export_roots = set()
+    #export our data
+    texture_nodes = set()
     for node in export_nodes:
-        roots = _export_data(node, temp_dir, export_rig, not only_textures)
-        export_roots.update(roots)
-        
+        nodes = _export_data(node, temp_dir, export_rig, not only_textures)
+        texture_nodes.update(nodes)
+
     #Let's export our texture info
     texture_mappings = {}
     if textures or only_textures:
         print("Exporting textures")
-        for root in export_roots:
-            branch = pm.listRelatives(root, allDescendents=True)
-            results = materials.get_textures(branch, export_nodes)
-            texture_mappings.update(results)
-            
+        #NOTE: get_textures() runs listRelatives()/ls(), both of which fall
+        #back to the active selection when handed nothing. The user's
+        #selection has been restored by this point, so never call in empty.
+        if texture_nodes:
+            texture_mappings = materials.get_textures(list(texture_nodes), export_nodes)
+
         print(texture_mappings)
         texture_file = open(temp_dir.joinpath('texture_info.json'), 'w')
         formatted_str = json.dumps(texture_mappings, indent=4)
