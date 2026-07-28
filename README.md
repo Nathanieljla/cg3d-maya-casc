@@ -38,6 +38,10 @@ This will automatically install all the dependencies without requiring admin pri
  (you can say 'yes' to the question)
 
  # Revisions
+ ### 1.6.3
+ 'Dynamic' now trims off branches of a hierarchy that don't lead to any exportable content.
+ 
+ 
  ### 1.6.2
  Fixed non-dynamic sets failing to export
  
