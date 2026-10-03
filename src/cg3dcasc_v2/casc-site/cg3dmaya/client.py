@@ -1,0 +1,40 @@
+
+
+#import maya.cmds as cmds
+import socket
+import json
+import struct
+
+
+HOST = '127.0.0.1'
+_maya_port = 7258 #dynamically changed
+
+
+def set_port(number):
+    print(f"new port number = {number}{number.__class__}")
+    global _maya_port
+    _maya_port = number
+
+
+def data_to_maya(scene: 'pycsc.dataTypes.DomainScene', data):
+    """Encodes and sends JSON data to the external server."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client:
+        try:
+            print(f"cascadeur port:{_maya_port}")
+            client.connect((HOST, _maya_port))
+            
+            json_string = json.dumps(data)
+            json_bytes = json_string.encode('utf-8')
+
+            # 3. Prepend a 4-byte length-prefix.
+            length_prefix = struct.pack('>I', len(json_bytes))
+            
+            # 4. Send the length-prefix followed by the JSON data.
+            client.sendall(length_prefix + json_bytes)
+            
+            print(f"Sent {len(json_bytes)} bytes of JSON data to the server. Data is:{data}")
+        
+        except ConnectionRefusedError:
+            scene.warning(f"Failed to connect to server at {HOST}:{_maya_port}. Is the server running?")
+        except Exception as e:
+            scene.error(f"An error occurred: {e}")
