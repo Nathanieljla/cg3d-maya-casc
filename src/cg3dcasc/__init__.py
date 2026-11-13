@@ -1,9 +1,0 @@
-from .core import *
-from . import preferences
-#from .core import hik
-
-VERSION = (1, 6, 3)
-
-__author__ = "Nathaniel Albright"
-__email__ = "developer@3dcg.guru"
-__version__ = '.'.join(map(str, VERSION))
