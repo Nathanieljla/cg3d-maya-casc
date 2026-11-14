@@ -88,6 +88,8 @@ class CascExportData(cg3dguru.udata.BaseData):
 
     LEGACY_0_1_0 = 0
     LATEST       = 1
+    EMBED_TEXTURES = 0
+    REFERENCE_TEXTURES = 1
     """export_version enum values.
 
     Every format gets an explicit index in the enum string, so adding a new
@@ -107,7 +109,11 @@ class CascExportData(cg3dguru.udata.BaseData):
             cg3dguru.udata.create_attr('cscDataId', 'string'),
             cg3dguru.udata.create_attr('dynamicSet', 'bool'),
             cg3dguru.udata.create_attr(
-                'embedTextures', 'bool', defaultValue=True
+                'embedTextures', 'enum',
+                enumName='Embed={0}:Reference={1}'.format(
+                    cls.EMBED_TEXTURES, cls.REFERENCE_TEXTURES
+                ),
+                defaultValue=cls.EMBED_TEXTURES,
             ),
             cg3dguru.udata.create_attr('textureLocation', 'string'),
             cg3dguru.udata.create_attr('export_version', 'enum',
@@ -148,14 +154,20 @@ class CascExportData(cg3dguru.udata.BaseData):
 
     @classmethod
     def get_embed_textures(cls, data):
-        """Return whether FBX media should be embedded for this export set.
+        """Return whether this export set embeds its texture media."""
+        return cls.get_texture_mode(data) == cls.EMBED_TEXTURES
 
-        Referenced data created before this attribute was introduced cannot
-        be upgraded in place, so it safely retains the previous behavior of
-        not embedding media.
-        """
-        attribute = data.node().attr('embedTextures')
-        return bool(attribute.get()) if attribute.exists() else False
+
+    @classmethod
+    def get_texture_mode(cls, data):
+        """Return the Embed/Reference enum value for this export set."""
+        return data.node().attr('embedTextures').get(asString=False)
+
+
+    @classmethod
+    def references_textures(cls, data):
+        """Return whether Cascadeur should apply referenced texture data."""
+        return cls.get_texture_mode(data) == cls.REFERENCE_TEXTURES
 
 
     @classmethod

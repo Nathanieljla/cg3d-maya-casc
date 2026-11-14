@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from maya import cmds
+from maya.api import OpenMaya as om
 
 from cg3dguru.maya import node_name
 
@@ -16,6 +17,17 @@ from cg3dcasc.material_data import (
 
 
 _SHADER_ATTR_MAP: Dict[str, List[Tuple[str, str]]] = {
+    "standardSurface": [
+        ("baseColor", "BaseColor"),
+        ("metalness", "Metallic"),
+        ("specularColor", "Specular"),
+        ("specularRoughness", "Roughness"),
+        ("normalCamera", "Normal"),
+        ("emissionColor", "EmissiveColor"),
+        ("opacity", "Opacity"),
+        ("coat", "Coat"),
+        ("coatRoughness", "CoatRoughness"),
+    ],
     "aiStandardSurface": [
         ("baseColor", "BaseColor"),
         ("metalness", "Metallic"),
@@ -61,6 +73,15 @@ _SHADER_ATTR_MAP: Dict[str, List[Tuple[str, str]]] = {
         ("normalCamera", "Normal"),
         ("highlightSize", "Roughness"),
         ("roughness", "SpecularRollOff"),
+    ],
+    "usdPreviewSurface": [
+        ("diffuseColor", "BaseColor"),
+        ("metallic", "Metallic"),
+        ("roughness", "Roughness"),
+        ("normal", "Normal"),
+        ("emissiveColor", "EmissiveColor"),
+        ("opacity", "Opacity"),
+        ("occlusion", "AmbientOcclusion"),
     ],
 }
 
@@ -109,9 +130,7 @@ class MayaMaterialData(BaseMaterialData):
 
         seen_shaders: Set[str] = set()
         for shape in shapes:
-            for shading_group in cmds.listConnections(
-                shape, type="shadingEngine"
-            ) or []:
+            for shading_group in cls._shading_groups(shape):
                 shaders = cmds.listConnections(
                     shading_group + ".surfaceShader",
                     source=True,
@@ -125,6 +144,27 @@ class MayaMaterialData(BaseMaterialData):
                     if attributes:
                         data.materials[shader] = attributes
         return data
+
+    @staticmethod
+    def _shading_groups(shape: str) -> List[str]:
+        """Return shading groups assigned to this specific DAG instance."""
+        instance_number = 0
+        try:
+            selection = om.MSelectionList()
+            selection.add(shape)
+            instance_number = selection.getDagPath(0).instanceNumber()
+        except RuntimeError:
+            pass
+
+        groups = cmds.listConnections(
+            "{}.instObjGroups[{}]".format(shape, instance_number),
+            source=False,
+            destination=True,
+            type="shadingEngine",
+        ) or []
+        if not groups:
+            groups = cmds.listConnections(shape, type="shadingEngine") or []
+        return list(dict.fromkeys(groups))
 
     @classmethod
     def _extract_shader(

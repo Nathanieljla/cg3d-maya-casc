@@ -336,26 +336,29 @@ def export(export_set=None, export_rig=False, cmd='', textures=True, only_textur
                 return False                
              
     #export our data
-    texture_nodes = set()
+    material_exports = []
     for node in export_nodes:
         nodes = _export_data(node, temp_dir, export_rig, not only_textures)
-        texture_nodes.update(nodes)
+        if (
+            (textures or only_textures)
+            and nodes
+            and CascExportData.references_textures(node)
+        ):
+            material_exports.append(
+                materials.build_export_data(node, list(nodes))
+            )
 
-    #Let's export our texture info
-    texture_mappings = {}
-    if textures or only_textures:
-        print("Exporting textures")
-        #NOTE: get_textures() runs listRelatives()/ls(), both of which fall
-        #back to the active selection when handed nothing. The user's
-        #selection has been restored by this point, so never call in empty.
-        if texture_nodes:
-            texture_mappings = materials.get_textures(list(texture_nodes), export_nodes)
-
-        print(texture_mappings)
-        texture_file = open(temp_dir.joinpath('texture_info.json'), 'w')
-        formatted_str = json.dumps(texture_mappings, indent=4)
-        texture_file.write(formatted_str)
-        texture_file.close()
+    # Embed mode intentionally emits no material sidecar. In Reference mode,
+    # Cascadeur updates the official Material instances created by FBX import.
+    if material_exports:
+        print("Exporting referenced materials")
+        material_path = temp_dir.joinpath(materials.MATERIAL_INFO_FILE)
+        with material_path.open("w", encoding="utf-8") as material_file:
+            json.dump(
+                materials.material_document(material_exports),
+                material_file,
+                indent=4,
+            )
 
     if cmd:
         server.send_to_casc(cmd)

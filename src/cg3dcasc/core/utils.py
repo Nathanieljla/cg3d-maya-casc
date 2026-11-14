@@ -3,18 +3,13 @@
 from pathlib import Path
 import time
 
-from maya import OpenMayaUI as omui
 from maya import cmds, mel
 from maya.api import OpenMaya as om
 
 try:
-    from PySide2.QtGui import QPixmap
     from PySide2.QtWidgets import QInputDialog, QMessageBox
-    from shiboken2 import wrapInstance
 except ImportError:
-    from PySide6.QtGui import QPixmap
     from PySide6.QtWidgets import QInputDialog, QMessageBox
-    from shiboken6 import wrapInstance
 
 import cg3dguru.ui
 import cg3dguru.udata
@@ -414,18 +409,12 @@ def create_export_set(name="", auto_add_selected=False):
 def convert_textures():
     roots = {mayautil.top_parent(item) for item in mayautil.ls(selection=True, long=True)}
     textures = materials.get_textures(mayautil.descendants(roots))
-    valid_extensions = {".jpg", ".jpeg", ".png"}
     for texture_paths in textures.values():
         for texture in texture_paths:
             texture_path = Path(texture)
-            if texture_path.suffix.lower() in valid_extensions:
+            if texture_path.suffix.lower() in materials.SUPPORTED_TEXTURE_EXTENSIONS:
                 continue
-            try:
-                pointer = omui.MQtUtil.createPixmap(str(texture_path))
-                pixmap = wrapInstance(int(pointer), QPixmap)
-                pixmap.toImage().save(str(texture_path.with_suffix(".png")))
-            except (RuntimeError, ValueError) as error:
-                cmds.warning(str(error))
+            materials.convert_texture(texture_path)
 
 
 @wait_cursor
