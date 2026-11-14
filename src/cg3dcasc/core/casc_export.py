@@ -375,7 +375,8 @@ def update_models():
     
     
 def update_textures():
-    export(cmd=u"cg3dmaya.update_textures()", only_textures=True)
+    """Rebuild and apply the current Reference material sidecar."""
+    return export(cmd=u"cg3dmaya.update_textures()", only_textures=True)
     
     
 def export_scene(new_scene):

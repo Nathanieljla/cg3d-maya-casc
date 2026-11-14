@@ -2,7 +2,7 @@
 DIVIDER = ''
 
 PARAMS = {
-    'label': 'Update Textures(s)'
+    'label': 'Update Textures'
 }
 
 def command(*args, **kwargs):

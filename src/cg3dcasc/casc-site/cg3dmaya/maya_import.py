@@ -110,6 +110,20 @@ def _get_modified_filter(existing_data, qrig_path, import_filter: fbx.FbxFilterT
 MATERIAL_INFO_FILE = 'material_info.json'
 MATERIAL_INFO_VERSION = 1
 
+_MATERIAL_MAP_RESETS = {
+    'normal_map': '',
+    'base_color_map': '',
+    'emissive_color_map': '',
+    'roughness_map': '',
+    'metallic_map': '',
+    'reflectance_map': '',
+    'ambient_occlusion_map': '',
+    'roughness_channel': 0,
+    'metallic_channel': 0,
+    'reflectance_channel': 0,
+    'ambient_occlusion_channel': 0,
+}
+
 
 def _path_segments(path):
     return [
@@ -174,7 +188,12 @@ def _match_mesh(meshes, mesh_data, used):
 
 
 def _set_material_values(scene, material, values):
-    for field, value in values.items():
+    # Treat the sidecar as a complete snapshot of the material's texture
+    # mappings. Clearing first ensures a disconnected or reassigned Maya map
+    # cannot leave its previous Cascadeur path/channel behind.
+    updates = dict(_MATERIAL_MAP_RESETS)
+    updates.update(values)
+    for field, value in updates.items():
         prop = material.get_property(field)
         if not prop or prop.id is None:
             print("Cascadeur Material has no '{}' property".format(field))
@@ -380,5 +399,6 @@ def smart_import():
     
     
 def update_textures():
+    """Read the latest Maya material sidecar and replace current mappings."""
     scene = pycsc.get_current_scene().ds
-    _load_materials(scene)
+    return _load_materials(scene)
