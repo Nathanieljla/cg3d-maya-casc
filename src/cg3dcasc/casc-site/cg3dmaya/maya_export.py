@@ -5,6 +5,7 @@ import typing
 import tempfile
 import os
 import pathlib
+import shutil
 import uuid
 
 import csc
@@ -24,13 +25,24 @@ def _select_for_export(scene, new_selection):
     
     
 def _clean_export_location():
-    print('Cascaduer Export Location {}'.format(temp_dir))
-    if not temp_dir.exists():
-        temp_dir.mkdir()
+    print('Cascadeur Export Location {}'.format(temp_dir))
+    temp_root = pathlib.Path(tempfile.gettempdir()).resolve()
+    export_dir = temp_dir.resolve()
+    if export_dir.parent != temp_root:
+        raise RuntimeError(
+            "Refusing to clear unexpected export directory '{}'".format(export_dir)
+        )
+
+    export_dir.mkdir(parents=True, exist_ok=True)
 
     #delete previous entries
-    for child in temp_dir.iterdir():
-        child.unlink(missing_ok=True)    
+    for child in export_dir.iterdir():
+        if child.is_symlink() or child.is_file():
+            child.unlink(missing_ok=True)
+        elif child.is_dir():
+            shutil.rmtree(child)
+        else:
+            child.unlink(missing_ok=True)
 
 
 def _export(scene, export_sets):
@@ -143,8 +155,13 @@ def determine_export_action(scene):
 
 def export_maya_animation():   
     scene = pycsc.get_current_scene().ds
-    _clean_export_location()
+    try:
+        _clean_export_location()
+    except OSError as error:
+        scene.error("Could not clear Maya Bridge export location: {}".format(error))
+        return False
     determine_export_action(scene)
+    return True
 
 
 def run(*args, **kwargs):
