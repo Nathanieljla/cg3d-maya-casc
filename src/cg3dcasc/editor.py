@@ -594,8 +594,16 @@ class HikExportEditor(cg3dguru.ui.Window):
     
     
     def remove_script_job(self, jobId):
-        self.ui.destroyed.disconnect( self.job_handlers[jobId] )
-        cmds.scriptJob(kill=jobId)
+        # This is called by the UI's destroyed signal. Qt tears down signal
+        # connections as part of destruction, so disconnecting the currently
+        # executing callback produces a RuntimeWarning in PySide.
+        self.job_handlers.pop(jobId, None)
+        if cmds.scriptJob(exists=jobId):
+            try:
+                cmds.scriptJob(kill=jobId, force=True)
+            except RuntimeError:
+                # Maya may already be shutting down when the widget dies.
+                pass
         
   
         

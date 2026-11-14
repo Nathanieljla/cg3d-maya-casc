@@ -26,8 +26,9 @@ class Data:
 
 
 class Item:
-    def __init__(self, name):
+    def __init__(self, name, parent=None):
         self.name = name
+        self.parent = parent
 
     def __repr__(self):
         return "Item({})".format(self.name)
@@ -68,6 +69,10 @@ class CascadeurExportTests(unittest.TestCase):
     def _load(self, scene=None):
         scene = scene or Scene()
         export_fbx = CallRecorder()
+
+        def write_export(*args, **kwargs):
+            export_fbx(*args, **kwargs)
+            pathlib.Path(args[0]).write_bytes(b"fbx")
         send_to_maya = CallRecorder()
         settings_instances = []
 
@@ -100,6 +105,8 @@ class CascadeurExportTests(unittest.TestCase):
             BAKE_ANIMATION="Bake Animation",
             _active_port_number=6000,
             _add_export_settings=lambda behaviour: None,
+            get_export_sets=lambda unused_scene: (set(), set()),
+            get_set_members=lambda unused_set: set(),
         )
         server = make_module(
             "_cascadeur_export_host.server", send_to_maya=send_to_maya
@@ -107,7 +114,7 @@ class CascadeurExportTests(unittest.TestCase):
         fbx = make_module(
             "_cascadeur_export_host.fbx",
             FbxFilterType=types.SimpleNamespace(SELECTED=5),
-            export_fbx=export_fbx,
+            export_fbx=write_export,
         )
         modules = {
             "csc": csc,
@@ -205,6 +212,47 @@ class CascadeurExportTests(unittest.TestCase):
         finally:
             sys.modules.pop("_cascadeur_export_host.maya_export", None)
 
+    def test_export_selection_includes_required_parent_transforms(self):
+        module, unused_scene, unused_export, unused_send, unused_settings = self._load()
+        container = Item("container")
+        mesh_parent = Item("mesh", parent=container)
+        mesh = Item("mesh", parent=mesh_parent)
+        joint = Item("root", parent=container)
+        try:
+            self.assertEqual(
+                [container, mesh_parent, mesh, joint],
+                module._with_required_ancestors([mesh, joint]),
+            )
+        finally:
+            sys.modules.pop("_cascadeur_export_host.maya_export", None)
+
+    def test_export_does_not_dispatch_when_fbx_file_is_missing(self):
+        module, scene, unused_export, send_to_maya, unused_settings = self._load()
+        root = types.SimpleNamespace(name="root", scene="scene")
+        root_reference = types.SimpleNamespace(object=root)
+        maya_id = Data("uuid")
+        maya_behaviour = types.SimpleNamespace(
+            datasWithSameNamesReadonly=DataCollection({"maya_id": [maya_id]}),
+            datasWithSameNames=DataCollection({"Bake Animation": [Data(False)]}),
+        )
+        root_behaviour = types.SimpleNamespace(
+            object=types.SimpleNamespace(name="CHAR_CSC_EXPORT"),
+            behaviours=types.SimpleNamespace(get=lambda: [root_reference]),
+            get_siblings_by_name=lambda name: [maya_behaviour],
+        )
+        export_set = types.SimpleNamespace(
+            get_behaviour_by_name=lambda name: root_behaviour
+        )
+        module.fbx.export_fbx = lambda *args, **kwargs: None
+        try:
+            with tempfile.TemporaryDirectory() as directory:
+                module.temp_dir = pathlib.Path(directory)
+                self.assertFalse(module._export(scene, [export_set]))
+            self.assertEqual([], send_to_maya.calls)
+            self.assertIn("no file was created", scene.errors[-1])
+        finally:
+            sys.modules.pop("_cascadeur_export_host.maya_export", None)
+
     def test_character_export_rejects_multiple_rig_infos(self):
         module, scene, unused_export, unused_send, unused_settings = self._load()
         scene.get_behaviours = lambda name: [object(), object()] if name == "RigInfo" else []
@@ -252,6 +300,33 @@ class CascadeurExportTests(unittest.TestCase):
                 [["spine_01", "spine_02"]],
                 module._spline_ik_chains(scene, {joint_a, joint_b}),
             )
+        finally:
+            sys.modules.pop("_cascadeur_export_host.maya_export", None)
+
+    def test_character_export_reuses_an_exactly_matching_export_set(self):
+        module, scene, unused_export, unused_send, unused_settings = self._load()
+        rig_info = types.SimpleNamespace(object=Item("UnrealRig"))
+        joint = Item("pelvis")
+        mesh = Item("bodyMesh")
+        matching = Item("UnrealRig_CSC_EXPORT")
+        different = Item("Other_CSC_EXPORT")
+        module.common.get_export_sets = lambda unused_scene: (
+            {different, matching},
+            set(),
+        )
+        module.common.get_set_members = lambda export_set: (
+            {joint, mesh} if export_set is matching else {joint}
+        )
+        create_set = CallRecorder(Item("newSet"))
+        module._new_rig_export_set = create_set
+        try:
+            result = module._get_or_create_rig_export_set(
+                scene,
+                rig_info,
+                {joint, mesh},
+            )
+            self.assertIs(matching, result)
+            self.assertEqual([], create_set.calls)
         finally:
             sys.modules.pop("_cascadeur_export_host.maya_export", None)
 

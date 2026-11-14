@@ -18,7 +18,12 @@ if str(site_root) not in sys.path:
     sys.path.insert(0, str(site_root))
 
 import cg3dmaya
-from cg3dmaya import common, maya_export, maya_import
+from cg3dmaya import common, fbx as maya_fbx, maya_export, maya_import
+
+# An existing development instance may have imported these modules before the
+# checkout changed. Reload the workflow under test from the source path above.
+maya_export = importlib.reload(maya_export)
+cg3dmaya.export_character_and_rig = maya_export.export_character_and_rig
 
 # The script runner's ``scene`` binding is the low-level csc.domain.Scene.
 # Bridge commands consistently operate on pycsc's higher-level domain-scene
@@ -95,6 +100,7 @@ check("select set members", common._select_set_members(scene, export_set))
 
 with tempfile.TemporaryDirectory() as directory:
     original_gettempdir = maya_export.tempfile.gettempdir
+    original_temp_dir = maya_export.temp_dir
     maya_export.tempfile.gettempdir = lambda: directory
     try:
         maya_export.temp_dir = pathlib.Path(directory) / "mayacasc"
@@ -106,6 +112,7 @@ with tempfile.TemporaryDirectory() as directory:
         maya_export._clean_export_location()
         check("clean file and fbm directory", list(maya_export.temp_dir.iterdir()) == [])
     finally:
+        maya_export.temp_dir = original_temp_dir
         maya_export.tempfile.gettempdir = original_gettempdir
 
 with tempfile.TemporaryDirectory() as directory:
@@ -133,6 +140,76 @@ if unreal_scene_path.is_file():
     export_content = maya_export._rig_export_content(unreal_scene, rig_info)
     influenced_meshes = export_content.difference(rig_joints)
     check("Unreal export includes influenced meshes", bool(influenced_meshes))
+    previous_export_set = maya_export._matching_rig_export_set(
+        unreal_scene,
+        rig_info,
+        export_content,
+    )
+    first_export_set = maya_export._get_or_create_rig_export_set(
+        unreal_scene,
+        rig_info,
+        export_content,
+    )
+    second_export_set = maya_export._get_or_create_rig_export_set(
+        unreal_scene,
+        rig_info,
+        export_content,
+    )
+    check(
+        "character export reuses its matching set",
+        first_export_set == second_export_set,
+    )
+    root_behaviour = first_export_set.get_behaviour_by_name(common.MAYA_ROOTS)
+    export_selection = []
+    hierarchy = importlib.import_module("common.hierarchy")
+    for reference in root_behaviour.behaviours.get():
+        export_selection.extend(
+            hierarchy.get_object_branch_inclusive(
+                reference.object,
+                reference.object.scene,
+            )
+        )
+    export_selection = maya_export._with_required_ancestors(export_selection)
+    check(
+        "Manny export selection includes hidden parent transform",
+        len(export_selection) > len(set(item.name for item in export_selection)),
+    )
+    check(
+        "select Manny export content",
+        bool(
+            unreal_scene.edit(
+                "Select clean-process character export content",
+                maya_export._select_for_export,
+                export_selection,
+            )
+        ),
+    )
+    with tempfile.TemporaryDirectory() as directory:
+        fbx_path = pathlib.Path(directory) / "UE5_Manny.fbx"
+        settings = csc.fbx.FbxSettings()
+        settings.bake_animation = False
+        maya_fbx.export_fbx(
+            str(fbx_path),
+            maya_fbx.FbxFilterType.SELECTED,
+            settings,
+        )
+        check(
+            "Manny selected content creates FBX",
+            fbx_path.is_file() and fbx_path.stat().st_size > 0,
+        )
+    if previous_export_set is None:
+        def remove_smoke_export_set(edit_scene):
+            edit_scene.me.delete_objects([first_export_set])
+
+        check(
+            "remove temporary character export set",
+            bool(
+                unreal_scene.edit(
+                    "Remove clean-process character export set",
+                    remove_smoke_export_set,
+                )
+            ),
+        )
     spline_chains = maya_export._spline_ik_chains(unreal_scene, rig_joints)
     check("Unreal rig exposes a spline spine", bool(spline_chains))
     check(
