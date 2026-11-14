@@ -1,0 +1,122 @@
+"""Script body executed inside a clean Cascadeur GUI process.
+
+The local Cascadeur script server supplies ``scene``, ``ps`` and ``ARGS``.
+The final ``result`` value is returned to the external runner as JSON.
+"""
+
+from __future__ import annotations
+
+import importlib
+import pathlib
+import sys
+import tempfile
+
+
+site_root = pathlib.Path(ARGS["site_root"]).resolve()
+if str(site_root) not in sys.path:
+    sys.path.insert(0, str(site_root))
+
+import cg3dmaya
+from cg3dmaya import common, maya_export, maya_import
+
+# The script runner's ``scene`` binding is the low-level csc.domain.Scene.
+# Bridge commands consistently operate on pycsc's higher-level domain-scene
+# wrapper, so exercise the same object the production entry points obtain.
+scene = pycsc.get_current_scene().ds
+
+
+def under(path, root):
+    try:
+        pathlib.Path(path).resolve().relative_to(pathlib.Path(root).resolve())
+        return True
+    except ValueError:
+        return False
+
+
+checks = []
+
+
+def check(name, condition, detail=""):
+    if not condition:
+        raise AssertionError("{}: {}".format(name, detail or "condition was false"))
+    checks.append(name)
+
+
+check("development cg3dmaya checkout", under(cg3dmaya.__file__, site_root), cg3dmaya.__file__)
+check(
+    "no pymel loaded",
+    not any(name == "pymel" or name.startswith("pymel.") for name in sys.modules),
+)
+
+expected_commands = {
+    "add_selected": "Maya.Export Sets.Add Selected",
+    "create_new_set": "Maya.Export Sets.Create New Set",
+    "export_animation": "Maya.Export Animation",
+    "remove_selected": "Maya.Export Sets.Remove Selected",
+    "select_set_members": "Maya.Export Sets.Select Set Members",
+    "sync_ids": "Maya.Export Sets.Sync Maya ID",
+}
+for module_name, expected_name in expected_commands.items():
+    module = importlib.import_module("cg3dcmds." + module_name)
+    check(module_name + " command name", module.command_name() == expected_name)
+    check(module_name + " menu name", module.name() == expected_name)
+
+
+created = {}
+
+
+def make_roots(edit_scene):
+    created["one"] = edit_scene.create_object("SmokeRootOne", simple=True)
+    created["two"] = edit_scene.create_object("SmokeRootTwo", simple=True)
+
+
+check("create smoke roots edit", bool(scene.edit("Create smoke roots", make_roots)))
+export_set = common.create_export_set(scene, {created["one"]})
+check("create export set", export_set is not None)
+all_sets, selected_sets = common.get_export_sets(scene)
+check("discover export set", export_set in all_sets)
+check("initial set membership", common.get_set_members(export_set) == {created["one"]})
+common._add_to_set(scene, {created["two"]}, export_set)
+check(
+    "add set membership",
+    common.get_set_members(export_set) == {created["one"], created["two"]},
+)
+
+identifier = next(iter(common.get_ids({export_set})))
+check("export id is present", bool(identifier))
+common._sync_id(scene, "clean-process-smoke-id", export_set)
+check(
+    "sync export id",
+    set(common.get_ids({export_set})) == {"clean-process-smoke-id"},
+)
+check("select set members", common._select_set_members(scene, export_set))
+
+with tempfile.TemporaryDirectory() as directory:
+    original_gettempdir = maya_export.tempfile.gettempdir
+    maya_export.tempfile.gettempdir = lambda: directory
+    try:
+        maya_export.temp_dir = pathlib.Path(directory) / "mayacasc"
+        maya_export.temp_dir.mkdir()
+        (maya_export.temp_dir / "old.fbx").write_bytes(b"old")
+        media = maya_export.temp_dir / "old.fbm"
+        media.mkdir()
+        (media / "texture.png").write_bytes(b"old")
+        maya_export._clean_export_location()
+        check("clean file and fbm directory", list(maya_export.temp_dir.iterdir()) == [])
+    finally:
+        maya_export.tempfile.gettempdir = original_gettempdir
+
+with tempfile.TemporaryDirectory() as directory:
+    original_gettempdir = tempfile.gettempdir
+    tempfile.gettempdir = lambda: directory
+    try:
+        check("embed update textures is a no-op", maya_import._load_materials(scene) is None)
+    finally:
+        tempfile.gettempdir = original_gettempdir
+
+result = {
+    "host": "Cascadeur",
+    "module": str(pathlib.Path(cg3dmaya.__file__).resolve()),
+    "checks": checks,
+    "count": len(checks),
+}
