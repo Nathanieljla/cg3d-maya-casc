@@ -10,8 +10,6 @@ Please consider getting the installer from my [Gumroad account](https://3dcgguru
 
 ![Windows](https://img.shields.io/badge/Windows-tested-blue)
 
-*As of Sept. 2025 Pymel hasn't been updated to work with Maya 2026.  Users will get a documentation error, which can be manually fixed.  The directions for copying and renaming the documents can be [found here](https://www.autodesk.com/support/technical/article/caas/sfdcarticles/sfdcarticles/PyMEL-fails-while-importing-modules-with-error-Cannot-find-maya-documentation-in-Maya.html)
-
 # cg3d-maya-casc
 Easily bridge data between Maya and Cascadeur with this Maya Module.
 
