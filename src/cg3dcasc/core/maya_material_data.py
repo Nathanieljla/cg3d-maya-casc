@@ -85,6 +85,13 @@ _SHADER_ATTR_MAP: Dict[str, List[Tuple[str, str]]] = {
     ],
 }
 
+_TEXTURE_CHANNELS = {
+    "outColorR": 0,
+    "outColorG": 1,
+    "outColorB": 2,
+    "outAlpha": 3,
+}
+
 
 class MayaMaterialData(BaseMaterialData):
     """Canonical material values extracted from Maya mesh nodes."""
@@ -194,18 +201,37 @@ class MayaMaterialData(BaseMaterialData):
         cls, shader: str, maya_attribute: str
     ) -> Optional[Dict[str, Any]]:
         plug = "{}.{}".format(shader, maya_attribute)
-        texture_path = cls._find_texture(plug)
-        if texture_path:
-            return {"type": "texture", "value": [texture_path]}
+        texture = cls._find_texture(plug)
+        if texture:
+            texture_path, texture_channel = texture
+            entry = {"type": "texture", "value": [texture_path]}
+            if texture_channel is not None:
+                entry["channel"] = texture_channel
+            return entry
         try:
             return cls._constant_entry(cmds.getAttr(plug))
         except (RuntimeError, ValueError, TypeError):
             return None
 
     @staticmethod
-    def _find_texture(plug: str) -> Optional[str]:
+    def _find_texture(plug: str) -> Optional[Tuple[str, Optional[int]]]:
+        file_channels = {}
+        source_plugs = cmds.listConnections(
+            plug,
+            source=True,
+            destination=False,
+            plugs=True,
+            skipConversionNodes=True,
+        ) or []
+        for source_plug in source_plugs:
+            node, unused_separator, output = source_plug.partition(".")
+            if cmds.nodeType(node) == "file":
+                file_channels[node] = _TEXTURE_CHANNELS.get(
+                    output.rsplit(".", 1)[-1]
+                )
+
         connections = cmds.listConnections(
-            plug, source=True, destination=False
+            plug, source=True, destination=False, skipConversionNodes=False
         ) or []
         file_nodes = {node for node in connections if cmds.nodeType(node) == "file"}
         for connection in connections:
@@ -216,8 +242,11 @@ class MayaMaterialData(BaseMaterialData):
             )
         if not file_nodes:
             return None
-        filepath = cmds.getAttr(sorted(file_nodes)[0] + ".fileTextureName")
-        return filepath.replace("\\", "/") if filepath else None
+        file_node = sorted(file_nodes)[0]
+        filepath = cmds.getAttr(file_node + ".fileTextureName")
+        if not filepath:
+            return None
+        return filepath.replace("\\", "/"), file_channels.get(file_node)
 
     @staticmethod
     def _constant_entry(raw: Any) -> Optional[Dict[str, Any]]:

@@ -46,6 +46,13 @@ _MAP_DEFAULTS = {
     },
 }
 
+_MAP_CHANNEL_PROPERTIES = {
+    "roughness_map": "roughness_channel",
+    "metallic_map": "metallic_channel",
+    "reflectance_map": "reflectance_channel",
+    "ambient_occlusion_map": "ambient_occlusion_channel",
+}
+
 
 def _slash(path):
     return str(path).replace("\\", "/")
@@ -58,11 +65,28 @@ def _leaf(path):
 def _resolved_texture_path(filepath):
     expanded = os.path.expandvars(os.path.expanduser(str(filepath)))
     path = pathlib.Path(expanded)
-    if not path.is_absolute():
+
+    # Maya commonly stores project-relative file nodes with a leading slash,
+    # for example /sourceimages/albedo.png. On Windows pathlib considers that
+    # drive-rooted, even though Maya means "relative to the current project".
+    project_relative = not path.is_absolute()
+    if os.name == "nt":
+        windows_path = pathlib.PureWindowsPath(expanded)
+        project_relative = project_relative or (
+            bool(windows_path.root) and not bool(windows_path.drive)
+        )
+
+    if project_relative:
+        relative_path = expanded.lstrip("/\\")
         try:
-            path = pathlib.Path(cmds.workspace(expandName=expanded))
+            path = pathlib.Path(cmds.workspace(expandName=relative_path))
+            if not path.is_absolute():
+                workspace_root = pathlib.Path(
+                    cmds.workspace(query=True, rootDirectory=True)
+                )
+                path = workspace_root.joinpath(relative_path)
         except RuntimeError:
-            pass
+            path = pathlib.Path(relative_path)
     return path
 
 
@@ -99,7 +123,7 @@ def prepare_texture_path(filepath, texture_location=""):
     source = _resolved_texture_path(filepath)
     if not source.is_file():
         cmds.warning("Texture file does not exist: '{}'".format(source))
-        return _slash(source)
+        return _slash(source.resolve())
 
     if not texture_location:
         return _slash(source.resolve())
@@ -200,6 +224,9 @@ def _cascadeur_material(attributes, texture_location):
                 texture_path, texture_location
             )
             result.update(_MAP_DEFAULTS.get(map_name, {}))
+            channel_property = _MAP_CHANNEL_PROPERTIES.get(map_name)
+            if channel_property:
+                result[channel_property] = int(entry.get("channel", 0))
         elif entry_type in {"scalar", "vector"} and value_name:
             result[value_name] = _constant(entry_value, value_name)
     return result
