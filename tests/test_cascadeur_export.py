@@ -25,6 +25,14 @@ class Data:
         return self.value
 
 
+class Item:
+    def __init__(self, name):
+        self.name = name
+
+    def __repr__(self):
+        return "Item({})".format(self.name)
+
+
 class DataCollection:
     def __init__(self, values):
         self.values = values
@@ -51,6 +59,9 @@ class Scene:
 
     def warning(self, message):
         self.warnings.append(message)
+
+    def get_behaviours(self, name):
+        return []
 
 
 class CascadeurExportTests(unittest.TestCase):
@@ -191,6 +202,112 @@ class CascadeurExportTests(unittest.TestCase):
             self.assertEqual(
                 [((6000, "cg3dcasc.core.import_fbx()"), {})], send_to_maya.calls
             )
+        finally:
+            sys.modules.pop("_cascadeur_export_host.maya_export", None)
+
+    def test_character_export_rejects_multiple_rig_infos(self):
+        module, scene, unused_export, unused_send, unused_settings = self._load()
+        scene.get_behaviours = lambda name: [object(), object()] if name == "RigInfo" else []
+        try:
+            self.assertFalse(module.export_character_and_rig())
+            self.assertIn("multiple Rig Info", scene.errors[0])
+        finally:
+            sys.modules.pop("_cascadeur_export_host.maya_export", None)
+
+    def test_character_export_requires_one_rig_info_with_valid_qrt(self):
+        module, scene, unused_export, unused_send, unused_settings = self._load()
+        try:
+            self.assertFalse(module.export_character_and_rig())
+            self.assertIn("no Rig Info", scene.errors[-1])
+
+            rig_info = types.SimpleNamespace(
+                object=Item("Rig"),
+                qrt_json=Data("not-json"),
+            )
+            scene.get_behaviours = (
+                lambda name: [rig_info] if name == "RigInfo" else []
+            )
+            self.assertFalse(module.export_character_and_rig())
+            self.assertIn("qrt_json is invalid", scene.errors[-1])
+        finally:
+            sys.modules.pop("_cascadeur_export_host.maya_export", None)
+
+    def test_proto_spline_ik_is_serialized_in_rig_mode(self):
+        module, scene, unused_export, unused_send, unused_settings = self._load()
+        joint_a = Item("spine_01")
+        joint_b = Item("spine_02")
+        proto = types.SimpleNamespace(
+            joints=Data(
+                [
+                    types.SimpleNamespace(object=joint_a),
+                    types.SimpleNamespace(object=joint_b),
+                ]
+            )
+        )
+        scene.get_behaviours = (
+            lambda name: [proto] if name == "ProtoSplineIk" else []
+        )
+        try:
+            self.assertEqual(
+                [["spine_01", "spine_02"]],
+                module._spline_ik_chains(scene, {joint_a, joint_b}),
+            )
+        finally:
+            sys.modules.pop("_cascadeur_export_host.maya_export", None)
+
+    def test_character_export_writes_qrt_spline_map_and_influenced_mesh(self):
+        module, scene, unused_export, unused_send, unused_settings = self._load()
+        joint_a = Item("pelvis")
+        joint_b = Item("spine_01")
+        mesh = Item("bodyMesh")
+        rig_info = types.SimpleNamespace(
+            object=Item("UnrealRig"),
+            qrt_json=Data('{"Document": []}'),
+            related_joints=Data([joint_a, joint_b]),
+        )
+        mesh_behaviour = types.SimpleNamespace(
+            object=mesh,
+            linked_objects=Data([joint_b]),
+        )
+        spline = types.SimpleNamespace(
+            joints=Data(
+                [
+                    types.SimpleNamespace(object=joint_a),
+                    types.SimpleNamespace(object=joint_b),
+                ]
+            )
+        )
+        scene.get_behaviours = lambda name: {
+            "RigInfo": [rig_info],
+            "MeshObject": [mesh_behaviour],
+            "SplineIk": [spline],
+        }.get(name, [])
+        maya_data = types.SimpleNamespace(
+            datasWithSameNamesReadonly=DataCollection({"maya_id": [Data("uuid")]})
+        )
+        export_set = Item("UnrealRig_CSC_EXPORT")
+        export_set.get_behaviour_by_name = lambda name: maya_data
+        create_set = CallRecorder(export_set)
+        export = CallRecorder()
+        module._new_rig_export_set = create_set
+        module._export = export
+        module._clean_export_location = CallRecorder()
+
+        try:
+            with tempfile.TemporaryDirectory() as directory:
+                module.temp_dir = pathlib.Path(directory)
+                self.assertTrue(module.export_character_and_rig())
+                qrig = module.temp_dir / "UnrealRig_CSC_EXPORT.uuid.qrigcasc"
+                hikmap = module.temp_dir / "UnrealRig_CSC_EXPORT.uuid.hikmap"
+                self.assertTrue(qrig.is_file())
+                self.assertTrue(hikmap.is_file())
+                mapping = __import__("json").loads(hikmap.read_text(encoding="utf-8"))
+            self.assertEqual([["pelvis", "spine_01"]], mapping["spline_ik_chains"])
+            self.assertEqual(
+                {joint_a, joint_b, mesh},
+                create_set.calls[0][0][2],
+            )
+            self.assertEqual([((scene, {export_set}), {})], export.calls)
         finally:
             sys.modules.pop("_cascadeur_export_host.maya_export", None)
 

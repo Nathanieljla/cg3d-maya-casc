@@ -611,6 +611,209 @@ def export_qrig_file(character_node, qrig_data, filename):
     return filename
 
 
+def _leaf_name(name):
+    return str(name).replace('\\', '|').rsplit('|', 1)[-1]
+
+
+def _without_namespace(name):
+    return _leaf_name(name).rsplit(':', 1)[-1]
+
+
+def _qrt_entries(document):
+    for title in document.get('Document', []):
+        title_name = title.get('Title', '')
+        for section in title.get('Sections', []):
+            for entry in section.get('Names', []):
+                yield title_name, section.get('Section', ''), entry
+
+
+def _qrt_hik_entries(document):
+    """Map ordinary QRT bone semantics to Maya HIK slots."""
+    reverse = {}
+    for hik_name, qrt_name in HIK_ATTRS.items():
+        if qrt_name and not hik_name.startswith('Leaf'):
+            reverse.setdefault(qrt_name, hik_name)
+
+    result = {}
+    for title, unused_section, entry in _qrt_entries(document):
+        if title.lower() == 'twist bones':
+            continue
+        hik_name = reverse.get(entry.get('Bone name'))
+        if hik_name and entry.get('Joint name'):
+            result[hik_name] = entry
+    return result
+
+
+def _match_imported_joint(entry, joint_names):
+    """Resolve a QRT joint entry against FBX-imported Maya DAG paths."""
+    target = str(entry.get('Joint name', ''))
+    if not target:
+        return None
+    target_leaf = _leaf_name(target)
+    target_base = _without_namespace(target)
+    target_path = [_without_namespace(item) for item in entry.get('Joint path', [])]
+
+    scored = []
+    for candidate in joint_names:
+        candidate = str(candidate)
+        leaf = _leaf_name(candidate)
+        base = _without_namespace(candidate)
+        segments = [_without_namespace(item) for item in candidate.split('|') if item]
+        score = 0
+        if candidate.lstrip('|') == target.lstrip('|'):
+            score += 100
+        if leaf == target_leaf:
+            score += 50
+        if base == target_base:
+            score += 25
+        if target_path:
+            parent_segments = segments[:-1]
+            suffix = min(len(parent_segments), len(target_path))
+            while suffix and parent_segments[-suffix:] != target_path[-suffix:]:
+                suffix -= 1
+            score += suffix
+        if score:
+            scored.append((score, candidate))
+    if not scored:
+        return None
+    best_score = max(score for score, unused_candidate in scored)
+    matches = sorted(candidate for score, candidate in scored if score == best_score)
+    return matches[0] if len(matches) == 1 else None
+
+
+def _ordered_spine_chain(chain, hips, neck, head):
+    """Keep the torso portion of a SplineIK chain in Maya hierarchy order."""
+    from maya import cmds
+
+    chain = list(dict.fromkeys(chain))
+    if len(chain) < 2:
+        return []
+
+    def depth(node):
+        return len([item for item in str(node).split('|') if item])
+
+    chain.sort(key=depth)
+    excluded = {item for item in (hips, neck, head) if item}
+    chain = [item for item in chain if item not in excluded]
+    if len(chain) < 2:
+        return []
+
+    # UUID-backed long names normally make depth sufficient. If an FBX loader
+    # returned short names, walk parent links to preserve the actual chain.
+    result = [chain[0]]
+    remaining = set(chain[1:])
+    while remaining:
+        child = next(
+            (
+                item
+                for item in remaining
+                if (cmds.listRelatives(item, parent=True, fullPath=True) or [None])[0]
+                == result[-1]
+            ),
+            None,
+        )
+        if child is None:
+            result.extend(sorted(remaining, key=depth))
+            break
+        result.append(child)
+        remaining.remove(child)
+    return result
+
+
+def _apply_spline_ik(mapping, metadata, joint_names):
+    """Replace the basic stomach/chest mapping with every SplineIK spine joint."""
+    if not metadata:
+        return mapping
+    start = mapping.get('Spine')
+    end = mapping.get('Spine1')
+    if not start or not end:
+        return mapping
+
+    chosen = []
+    for names in metadata.get('spline_ik_chains', []):
+        resolved = [
+            _match_imported_joint({'Joint name': name}, joint_names)
+            for name in names
+        ]
+        resolved = [item for item in resolved if item]
+        if start in resolved and end in resolved:
+            chosen = resolved
+            break
+    if not chosen:
+        return mapping
+
+    chosen = _ordered_spine_chain(
+        chosen,
+        mapping.get('Hips'),
+        mapping.get('Neck'),
+        mapping.get('Head'),
+    )
+    if not chosen:
+        return mapping
+
+    for key in ['Spine'] + ['Spine{}'.format(index) for index in range(1, 10)]:
+        mapping.pop(key, None)
+    for index, joint in enumerate(chosen[:10]):
+        mapping['Spine' if index == 0 else 'Spine{}'.format(index)] = joint
+    return mapping
+
+
+def import_qrig_character(qrig_path, hikmap_path, joint_names, export_node):
+    """Create and connect an HIK definition from Cascadeur's QRT metadata."""
+    from maya import cmds, mel
+    from cg3dguru.maya import Node
+    from . import hik
+    from .udata import QRigData
+
+    with open(qrig_path, encoding='utf-8') as qrig_file:
+        document = json.load(qrig_file)
+    metadata = {}
+    if hikmap_path:
+        with open(hikmap_path, encoding='utf-8') as mapping_file:
+            metadata = json.load(mapping_file)
+
+    mapping = {}
+    for hik_name, entry in _qrt_hik_entries(document).items():
+        joint = _match_imported_joint(entry, joint_names)
+        if joint:
+            mapping[hik_name] = joint
+    mapping = _apply_spline_ik(mapping, metadata, joint_names)
+    if not mapping:
+        cmds.error("Cascadeur QRT data did not match any imported joints.")
+
+    hik.load_hik()
+    previous = set(cmds.ls(type='HIKCharacterNode') or [])
+    mel.eval('hikCreateDefinition')
+    created = [
+        node
+        for node in (cmds.ls(type='HIKCharacterNode') or [])
+        if node not in previous
+    ]
+    if len(created) != 1:
+        cmds.error("Failed to create an HIK character definition for Cascadeur data.")
+    character = created[0]
+    indices = hik.get_node_index_mapping()
+    for hik_name, joint in mapping.items():
+        index = indices.get(hik_name)
+        if index is None:
+            continue
+        safe_joint = joint.replace('"', '\\"')
+        safe_character = character.replace('"', '\\"')
+        mel.eval(
+            'setCharacterObject("{}", "{}", {}, 0)'.format(
+                safe_joint, safe_character, index
+            )
+        )
+
+    qrig_data = QRigData.get_data(export_node) or QRigData.add_data(export_node)
+    Node(character).message.connect(qrig_data.characterNode, force=True)
+    spine_names = ['Spine'] + ['Spine{}'.format(index) for index in range(1, 10)]
+    spine_joints = [mapping[name] for name in spine_names if name in mapping]
+    if spine_joints:
+        Node(spine_joints[-1]).message.connect(qrig_data.chestJoint, force=True)
+    return Node(character)
+
+
 def get_skinned_meshes(character_node):
     """return a list of meshes that are deformed by the hik character joints"""
     

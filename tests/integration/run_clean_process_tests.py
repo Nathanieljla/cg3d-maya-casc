@@ -108,7 +108,14 @@ def run_cascadeur(executable, port, timeout, connect_existing=False, leave_open=
             base_url + "/run",
             {
                 "code": code,
-                "args": {"site_root": str(CASCADEUR_SITE)},
+                "args": {
+                    "site_root": str(CASCADEUR_SITE),
+                    "unreal_scene": str(
+                        executable.parent
+                        / "samples"
+                        / "UE5_Manny.casc"
+                    ),
+                },
                 "timeout": min(timeout, 120),
             },
             timeout=timeout + 5,

@@ -18,6 +18,7 @@ from . import fbx
 
 
 temp_dir = pathlib.Path(os.path.join(tempfile.gettempdir(), 'mayacasc'))
+HIK_MAPPING_VERSION = 1
 
 
 def _select_for_export(scene, new_selection):
@@ -91,6 +92,113 @@ def _export(scene, export_sets):
     cmd = "cg3dcasc.core.import_fbx()"
     server.send_to_maya(common._active_port_number, cmd)
 
+
+def _rig_export_content(scene, rig_info):
+    """Return RigInfo joints and meshes influenced by those joints."""
+    joints = set(rig_info.related_joints.get())
+    meshes = set()
+    for mesh_behaviour in scene.get_behaviours('MeshObject'):
+        if joints.intersection(mesh_behaviour.linked_objects.get()):
+            meshes.add(mesh_behaviour.object)
+    return joints | meshes
+
+
+def _spline_ik_chains(scene, rig_joints):
+    """Return SplineIK joint names belonging to this character.
+
+    Cascadeur's reference range is not guaranteed to be hierarchical. Maya
+    restores parent-chain order after the FBX skeleton has been imported.
+    """
+    rig_joints = set(rig_joints)
+    chains = []
+    # Normal scenes contain SplineIk. Rig Mode can still expose the proto
+    # behaviour, whose ``joints`` range has the same meaning.
+    for behaviour_name in ('SplineIk', 'ProtoSplineIk'):
+        for spline_ik in scene.get_behaviours(behaviour_name):
+            chain = [joint_behaviour.object for joint_behaviour in spline_ik.joints.get()]
+            if len(chain) < 2 or not rig_joints.intersection(chain):
+                continue
+            names = [joint.name for joint in chain]
+            if names not in chains:
+                chains.append(names)
+    return chains
+
+
+def _new_rig_export_set(scene, rig_info, export_objects):
+    """Create the persistent Maya export set used by later updates."""
+    result = None
+
+    def create(edit_scene):
+        nonlocal result
+        set_name = '{}_CSC_EXPORT'.format(rig_info.object.name.rstrip('_'))
+        result = common._create_data(
+            edit_scene,
+            set_name,
+            str(uuid.uuid1()),
+            export_objects,
+        )
+
+    scene.edit('Create Maya Character Export Set', create)
+    return result
+
+
+def export_character_and_rig():
+    """Export one Cascadeur RigInfo skeleton and its influenced meshes to Maya."""
+    scene = pycsc.get_current_scene().ds
+    rig_infos = list(scene.get_behaviours('RigInfo'))
+    if not rig_infos:
+        scene.error("Can't export character: no Rig Info behaviour was found.")
+        return False
+    if len(rig_infos) != 1:
+        scene.error("Can't export multiple characters. The scene has multiple Rig Info behaviours.")
+        return False
+
+    rig_info = rig_infos[0]
+    qrt_json = rig_info.qrt_json.get()
+    if not qrt_json or not qrt_json.strip():
+        scene.error("Can't export character: Rig Info does not define qrt_json.")
+        return False
+    try:
+        json.loads(qrt_json)
+    except (TypeError, ValueError):
+        scene.error("Can't export character: Rig Info qrt_json is invalid.")
+        return False
+
+    rig_joints = set(rig_info.related_joints.get())
+    if not rig_joints:
+        scene.error("Can't export character: Rig Info does not define any related joints.")
+        return False
+    export_objects = _rig_export_content(scene, rig_info)
+
+    try:
+        _clean_export_location()
+    except (OSError, RuntimeError) as error:
+        scene.error("Could not clear Maya Bridge export location: {}".format(error))
+        return False
+
+    export_set = _new_rig_export_set(scene, rig_info, export_objects)
+    if export_set is None:
+        scene.error("Can't export character: the Maya export set could not be created.")
+        return False
+
+    export_behaviour = export_set.get_behaviour_by_name(common.MAYA_BEHAVIOUR_NAME)
+    maya_id = export_behaviour.datasWithSameNamesReadonly.get_by_name('maya_id')[0].get()
+    filename_base = '{}.{}'.format(export_set.name, maya_id).replace(':', '_')
+    temp_dir.joinpath(filename_base + '.qrigcasc').write_text(qrt_json, encoding='utf-8')
+    temp_dir.joinpath(filename_base + '.hikmap').write_text(
+        json.dumps(
+            {
+                'version': HIK_MAPPING_VERSION,
+                'spline_ik_chains': _spline_ik_chains(scene, rig_joints),
+            },
+            indent=2,
+        ),
+        encoding='utf-8',
+    )
+
+    _export(scene, {export_set})
+    return True
+
  
 def export_sets(scene, export_sets):
     cmd = "cg3dcasc.core.import_fbx()"
@@ -157,7 +265,7 @@ def export_maya_animation():
     scene = pycsc.get_current_scene().ds
     try:
         _clean_export_location()
-    except OSError as error:
+    except (OSError, RuntimeError) as error:
         scene.error("Could not clear Maya Bridge export location: {}".format(error))
         return False
     determine_export_action(scene)

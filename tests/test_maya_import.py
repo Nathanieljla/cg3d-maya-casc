@@ -37,8 +37,12 @@ class Identifier:
 
 
 class ExportData:
-    def __init__(self, identifier=""):
+    def __init__(self, identifier="", node="existingSet"):
         self.cscDataId = Identifier(identifier)
+        self._node = node
+
+    def node(self):
+        return self._node
 
 
 class FakeCommands(types.ModuleType):
@@ -58,7 +62,7 @@ class FakeCommands(types.ModuleType):
         self.loaded = True
         self.plugin_loads.append(name)
 
-    def ls(self, **kwargs):
+    def ls(self, *args, **kwargs):
         if kwargs.get("type") == "objectSet":
             return list(self.scene_sets)
         if kwargs.get("assemblies"):
@@ -71,6 +75,9 @@ class FakeCommands(types.ModuleType):
 
     def sets(self, members, **kwargs):
         self.set_calls.append((list(members), kwargs))
+
+    def listRelatives(self, *args, **kwargs):
+        return []
 
     def error(self, message):
         raise RuntimeError(message)
@@ -120,6 +127,13 @@ class MayaImportTests(unittest.TestCase):
         )
         import_fbx = CallRecorder()
         fbx = make_module("_maya_import_host.fbx", import_fbx=import_fbx)
+        import_qrig = CallRecorder(
+            result=types.SimpleNamespace(name=lambda: "Character1")
+        )
+        casc_qrt = make_module(
+            "_maya_import_host.casc_qrt",
+            import_qrig_character=import_qrig,
+        )
         modules = {
             "maya": maya,
             "maya.cmds": cmds,
@@ -134,6 +148,7 @@ class MayaImportTests(unittest.TestCase):
             "_maya_import_host.server": server,
             "_maya_import_host.common": common,
             "_maya_import_host.fbx": fbx,
+            "_maya_import_host.casc_qrt": casc_qrt,
         }
         with installed_modules(modules):
             module = load_module(
@@ -211,6 +226,33 @@ class MayaImportTests(unittest.TestCase):
         self.assertEqual(
             [("unlock",), ("set", "new-uuid"), ("lock",)],
             created.cscDataId.operations,
+        )
+
+    def test_qrig_sidecars_create_hik_definition_for_new_import(self):
+        module, cmds, unused_send, unused_fbx, unused_hik, unused_data, unused_char = self._load()
+        cmds.assembly_results = [[], ["root"]]
+        module.get_import_files = lambda: {
+            "CHAR.uuid": {
+                "fbx": "character.fbx",
+                "qrigcasc": "character.qrigcasc",
+                "hikmap": "character.hikmap",
+            }
+        }
+        try:
+            module.import_fbx()
+        finally:
+            sys.modules.pop("_maya_import_host.casc_import", None)
+
+        self.assertEqual(
+            [
+                ((
+                    "character.qrigcasc",
+                    "character.hikmap",
+                    [],
+                    "CHAR",
+                ), {})
+            ],
+            module.casc_qrt.import_qrig_character.calls,
         )
 
 

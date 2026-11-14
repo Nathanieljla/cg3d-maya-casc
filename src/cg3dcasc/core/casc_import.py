@@ -18,6 +18,7 @@ from .udata import *
 from . import server
 from . import common
 from . import fbx
+from . import casc_qrt
 
 
 def import_from_casc():
@@ -44,6 +45,22 @@ def get_import_files():
     return files
 
 
+def _imported_joints(roots):
+    roots = list(roots or [])
+    joints = set(cmds.ls(roots, type='joint', long=True) or [])
+    if roots:
+        joints.update(
+            cmds.listRelatives(
+                roots,
+                allDescendents=True,
+                type='joint',
+                fullPath=True,
+            )
+            or []
+        )
+    return sorted(joints or (cmds.ls(type='joint', long=True) or []))
+
+
 def import_fbx():
     if not cmds.pluginInfo("fbxmaya", query=True, loaded=True):
         cmds.loadPlugin("fbxmaya")
@@ -56,9 +73,12 @@ def import_fbx():
 
     for key, item in files.items():
         fbx_path = item.get('fbx', '')
-        qrig_path = item.get('qrigcasc', '')    
+        qrig_path = item.get('qrigcasc', '')
+        hikmap_path = item.get('hikmap', '')
 
         set_name, maya_id = key.split('.')
+        target_export_node = None
+        new_roots = set()
         if fbx_path:
             matching_id_node = None
             for node in existing_exports:
@@ -93,11 +113,23 @@ def import_fbx():
 
                 data.cscDataId.unlock()
                 data.cscDataId.set(maya_id)
-                data.cscDataId.lock()                
+                data.cscDataId.lock()
+                target_export_node = new_node
+            else:
+                target_export_node = matching_id_node.node()
                 
                 
         if qrig_path:
-            print("Can't import rigs at the moment")
+            if target_export_node is None:
+                cmds.warning("Can't create HIK definition without imported FBX data.")
+                continue
+            character = casc_qrt.import_qrig_character(
+                qrig_path,
+                hikmap_path,
+                _imported_joints(new_roots),
+                target_export_node,
+            )
+            print("Created HIK character definition: {}".format(character.name()))
 
 
 def run():

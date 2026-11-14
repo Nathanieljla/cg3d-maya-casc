@@ -36,6 +36,11 @@ CASCADEUR_COMMANDS = {
     "add_selected.py": ("Maya.Export Sets.Add Selected", "add_selection_to", (False,)),
     "create_new_set.py": ("Maya.Export Sets.Create New Set", "add_selection_to", (True,)),
     "export_animation.py": ("Maya.Export Animation", "export_maya_animation", ()),
+    "export_character_and_rig.py": (
+        "Maya.Export Character and Rig",
+        "export_character_and_rig",
+        (),
+    ),
     "remove_selected.py": ("Maya.Export Sets.Remove Selected", "remove_selection_from", ()),
     "select_set_members.py": ("Maya.Export Sets.Select Set Members", "select_set_members", ()),
     "sync_ids.py": ("Maya.Export Sets.Sync Maya ID", "sync_selected_set_ids", ()),

@@ -41,6 +41,28 @@ class ProxyRoot(cg3dguru.udata.BaseData):
         return attrs  
 
 
+class QRigTwistData(cg3dguru.udata.BaseData):
+    """Twist-axis settings stored beside :class:`QRigData`.
+
+    Maya limits a compound attribute to ten total descendants. Keeping the
+    eight twist settings in their own block lets QRigData retain its message
+    links while its Attribute handle can still resolve these node-level names.
+    """
+
+    @staticmethod
+    def get_attributes():
+        return [
+            cg3dguru.udata.Attr('leftArmTwist', 'enum', enumName='X:Y:Z'),
+            cg3dguru.udata.Attr('leftForearmTwist', 'enum', enumName='X:Y:Z'),
+            cg3dguru.udata.Attr('leftUpperLegTwist', 'enum', enumName='X:Y:Z'),
+            cg3dguru.udata.Attr('leftLegTwist', 'enum', enumName='X:Y:Z'),
+            cg3dguru.udata.Attr('rightArmTwist', 'enum', enumName='X:Y:Z'),
+            cg3dguru.udata.Attr('rightForearmTwist', 'enum', enumName='X:Y:Z'),
+            cg3dguru.udata.Attr('rightUpperLegTwist', 'enum', enumName='X:Y:Z'),
+            cg3dguru.udata.Attr('rightLegTwist', 'enum', enumName='X:Y:Z'),
+        ]
+
+
 class QRigData(cg3dguru.udata.BaseData):
     """A block of data to help convert an HIK character to Cascaduer's quick rig"""
 
@@ -53,25 +75,13 @@ class QRigData(cg3dguru.udata.BaseData):
             cg3dguru.udata.create_attr('rightWeapon', 'message'),
             cg3dguru.udata.create_attr('alignPelvis', 'bool'),
             cg3dguru.udata.create_attr('createLayers', 'bool'),
-
-            cg3dguru.udata.Attr('leftArmTwist', 'enum', enumName='X:Y:Z'),
-            cg3dguru.udata.Attr('leftForearmTwist', 'enum', enumName='X:Y:Z'),
-
-            cg3dguru.udata.Attr('leftUpperLegTwist', 'enum', enumName='X:Y:Z'),
-            cg3dguru.udata.Attr('leftLegTwist', 'enum', enumName='X:Y:Z'),
-
-            cg3dguru.udata.Attr('rightArmTwist', 'enum', enumName='X:Y:Z'),
-            cg3dguru.udata.Attr('rightForearmTwist', 'enum', enumName='X:Y:Z'),
-
-            cg3dguru.udata.Attr('rightUpperLegTwist', 'enum', enumName='X:Y:Z'),
-            cg3dguru.udata.Attr('rightLegTwist', 'enum', enumName='X:Y:Z'),
-
         ]
         
         return attrs
     
     @classmethod
     def post_create(cls, data):
+        QRigTwistData.add_data(data.node())
         data.alignPelvis.set(1)
         data.createLayers.set(1)
         

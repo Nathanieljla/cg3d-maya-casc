@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import json
 import pathlib
 import sys
 import tempfile
@@ -32,9 +33,9 @@ from maya import cmds
 import cg3dcasc
 import cg3dguru
 from cg3dcasc import preferences
-from cg3dcasc.core import casc_export, fbx, materials, utils
+from cg3dcasc.core import casc_export, casc_qrt, fbx, materials, utils
 from cg3dcasc.core import maya as mayautil
-from cg3dcasc.core.udata import CascExportData
+from cg3dcasc.core.udata import CascExportData, QRigData
 from cg3dguru.maya import Node
 
 
@@ -186,6 +187,71 @@ class MayaCleanProcessSmokeTests(unittest.TestCase):
         # two units moves its weighted centre by one. Any meaningful movement
         # proves the cloned joint plugs drive the cloned skinCluster.
         self.assertGreater(after_center - before_center, 0.5)
+
+    def test_qrig_import_builds_hik_definition_with_full_spline_spine(self):
+        cmds.select(clear=True)
+        joint_names = []
+        for name in (
+            "pelvis",
+            "spine_01",
+            "spine_02",
+            "spine_03",
+            "neck_01",
+            "head",
+        ):
+            joint_names.append(cmds.joint(name=name))
+        joint_paths = cmds.ls(joint_names, long=True, type="joint") or []
+        export_set, unused_data = CascExportData.create_node(nodeType="objectSet")
+
+        document = {
+            "Document": [
+                {
+                    "Title": "Body",
+                    "Sections": [
+                        {
+                            "Section": "Body",
+                            "Names": [
+                                {"Bone name": "pelvis", "Joint name": "pelvis"},
+                                {"Bone name": "stomach", "Joint name": "spine_01"},
+                                {"Bone name": "chest", "Joint name": "spine_03"},
+                                {"Bone name": "neck", "Joint name": "neck_01"},
+                                {"Bone name": "head", "Joint name": "head"},
+                            ],
+                        }
+                    ],
+                }
+            ]
+        }
+        metadata = {
+            "version": 1,
+            "spline_ik_chains": [["spine_01", "spine_02", "spine_03"]],
+        }
+
+        with tempfile.TemporaryDirectory() as directory:
+            qrig_path = pathlib.Path(directory) / "character.qrigcasc"
+            hikmap_path = pathlib.Path(directory) / "character.hikmap"
+            qrig_path.write_text(json.dumps(document), encoding="utf-8")
+            hikmap_path.write_text(json.dumps(metadata), encoding="utf-8")
+            character = casc_qrt.import_qrig_character(
+                qrig_path,
+                hikmap_path,
+                joint_paths,
+                export_set,
+            )
+
+        self.assertEqual("HIKCharacterNode", cmds.nodeType(character.name()))
+        qrig_data = QRigData.get_data(export_set)
+        self.assertIsNotNone(qrig_data)
+        self.assertTrue(qrig_data.leftArmTwist.exists())
+        for slot, joint in zip(("Spine", "Spine1", "Spine2"), joint_paths[1:4]):
+            inputs = cmds.listConnections(
+                character.name() + "." + slot,
+                source=True,
+                destination=False,
+                type="joint",
+            ) or []
+            self.assertEqual([joint.rsplit("|", 1)[-1]], inputs)
+        self.assertFalse(cmds.ls(type="HIKControlSetNode") or [])
 
 
 def main():
