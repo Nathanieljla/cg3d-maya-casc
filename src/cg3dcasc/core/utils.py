@@ -249,11 +249,14 @@ def _copy_swap(skin_proxy, skin_cluster, clone_pairing, originals, replacements)
     for original in originals:
         edit_progress_bar(step=1)
         replacement = clone_pairing[original]
-        _replace(indices[original], indices[replacement], skin_cluster, "bindPreMatrix")
-        _replace(indices[original], indices[replacement], skin_cluster, "matrix")
+        # Vertex weights are keyed by the original influence's logical index.
+        # Keep that weighted index and replace its plugs with the proxy joint's
+        # plugs, then remove the temporary index created for the proxy.
+        _replace(indices[replacement], indices[original], skin_cluster, "bindPreMatrix")
+        _replace(indices[replacement], indices[original], skin_cluster, "matrix")
 
         pairs = cmds.listConnections(
-            node_name(replacement),
+            node_name(original),
             source=False,
             destination=True,
             plugs=True,

@@ -99,13 +99,16 @@ class CascExportData(cg3dguru.udata.BaseData):
 
     @classmethod
     def get_class_version(cls):
-        return (0, 2, 0)
+        return (0, 3, 0)
 
     @classmethod
     def get_attributes(cls):
         attrs = [
             cg3dguru.udata.create_attr('cscDataId', 'string'),
             cg3dguru.udata.create_attr('dynamicSet', 'bool'),
+            cg3dguru.udata.create_attr(
+                'embedTextures', 'bool', defaultValue=True
+            ),
             cg3dguru.udata.create_attr('textureLocation', 'string'),
             cg3dguru.udata.create_attr('export_version', 'enum',
                                        enumName = '0_1_0={0}:Latest={1}'.format(
@@ -141,6 +144,18 @@ class CascExportData(cg3dguru.udata.BaseData):
         old export logic, as that's the safe direction.
         """
         return cls.get_export_version(data) != cls.LATEST
+
+
+    @classmethod
+    def get_embed_textures(cls, data):
+        """Return whether FBX media should be embedded for this export set.
+
+        Referenced data created before this attribute was introduced cannot
+        be upgraded in place, so it safely retains the previous behavior of
+        not embedding media.
+        """
+        attribute = data.node().attr('embedTextures')
+        return bool(attribute.get()) if attribute.exists() else False
 
 
     @classmethod

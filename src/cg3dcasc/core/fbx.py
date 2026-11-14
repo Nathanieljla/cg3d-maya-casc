@@ -31,7 +31,9 @@ def _fbx(command, value=None, flag="v"):
     return mel.eval(statement + ";")
 
 
-def _configure_export(export_type, bake_animations, remove_namespaces):
+def _configure_export(
+    export_type, bake_animations, remove_namespaces, embed_media
+):
     start = int(cmds.playbackOptions(query=True, animationStartTime=True))
     end = int(cmds.playbackOptions(query=True, animationEndTime=True))
     export_animation = bool(export_type & EXPORT_ANIM)
@@ -52,14 +54,20 @@ def _configure_export(export_type, bake_animations, remove_namespaces):
     _fbx("FBXExportInputConnections", False)
     _fbx("FBXExportCameras", False)
     _fbx("FBXExportLights", False)
+    _fbx("FBXExportEmbeddedTextures", embed_media)
     _fbx("FBXExportInAscii", remove_namespaces)
     _fbx("FBXExportAnimationOnly", not export_rig)
 
 
 def set_export_options(
-    export_type, bake_animations=True, remove_namespaces=False
+    export_type,
+    bake_animations=True,
+    remove_namespaces=False,
+    embed_media=False,
 ):
-    _configure_export(export_type, bake_animations, remove_namespaces)
+    _configure_export(
+        export_type, bake_animations, remove_namespaces, embed_media
+    )
 
 
 def export(
@@ -68,11 +76,16 @@ def export(
     bake_animations=True,
     remove_namespaces=False,
     include_children=True,
+    embed_media=False,
 ):
-    _configure_export(export_type, bake_animations, remove_namespaces)
+    _configure_export(
+        export_type, bake_animations, remove_namespaces, embed_media
+    )
     _fbx("FBXExportSkeletonDefinitions", True)
     _fbx("FBXExportIncludeChildren", include_children)
-    _fbx("FBXExport", str(filename).replace("\\", "/"), flag="f")
+    # FBXExport defaults to the entire scene unless the selection-only switch
+    # is supplied.  The caller has already built the exact export selection.
+    _fbx("FBXExport -s", str(filename).replace("\\", "/"), flag="f")
 
     if os.path.exists(filename) and remove_namespaces:
         cg3dguru.utils.remove_namespaces(filename)

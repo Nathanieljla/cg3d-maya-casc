@@ -3,6 +3,7 @@ import json
 import tempfile
 import os
 import pathlib
+import shutil
 import time
 
 from maya import cmds
@@ -208,8 +209,12 @@ def _export_data(export_data, export_folder: pathlib.Path, export_rig: bool, exp
             
         #0.2.0 selects the whole trimmed branch, so the exporter doesn't need
         #to pull in children of its own.
-        fbx.export(fbx_file_path, bake_animations=bake,
-                   include_children = dynamic and legacy)
+        fbx.export(
+            fbx_file_path,
+            bake_animations=bake,
+            include_children=dynamic and legacy,
+            embed_media=CascExportData.get_embed_textures(export_data),
+        )
 
         if user_selection:
             cmds.select(mayautil.names(user_selection), replace=True)
@@ -279,6 +284,30 @@ def cascadeur_available():
     return result
 
 
+def _as_export_data(value):
+    """Return the CascExportData block stored on a node or data handle."""
+    if isinstance(value, cg3dguru.udata.Attribute):
+        value = value.node()
+
+    data = CascExportData.get_data(value)
+    if data is None:
+        raise ValueError(
+            "Node {!r} does not contain CascExportData".format(value)
+        )
+    return data
+
+
+def _clear_export_directory(directory):
+    """Remove files and FBX media directories from an export directory."""
+    for child in directory.iterdir():
+        if child.is_symlink() or child.is_file():
+            child.unlink()
+        elif child.is_dir():
+            shutil.rmtree(child)
+        else:
+            child.unlink()
+
+
 def export(export_set=None, export_rig=False, cmd='', textures=True, only_textures=False):
     if cmd and not cascadeur_available():
         cmds.error("Please make sure Cascadeur is running and try again.")
@@ -287,22 +316,21 @@ def export(export_set=None, export_rig=False, cmd='', textures=True, only_textur
     #remove any previous exports
     temp_dir = pathlib.Path(os.path.join(tempfile.gettempdir(), 'mayacasc'))
     print('Cascaduer Export Location {}'.format(temp_dir))
-    if not temp_dir.exists():
-        temp_dir.mkdir()
+    temp_dir.mkdir(parents=True, exist_ok=True)
 
     #delete previous entries
-    for child in temp_dir.iterdir():
-        child.unlink() #missing_ok=True) #missing_ok=True) #missing_ok doens't work for maya 2022
+    _clear_export_directory(temp_dir)
 
-    if export_set:
-        export_data = CascExportData.get_data(export_set)
-        export_nodes = [export_data or export_set]
+    if export_set is not None:
+        export_nodes = [_as_export_data(export_set)]
     else:
-        export_nodes = common.get_export_nodes()
-        if not export_nodes:
+        export_sets = common.get_export_nodes()
+        if export_sets:
+            export_nodes = [_as_export_data(node) for node in export_sets]
+        else:
             default_set = _build_default_set()
             if default_set:
-                export_nodes = [default_set]
+                export_nodes = [_as_export_data(default_set)]
             else:
                 cmds.confirmDialog(message="Nothing was found to export. Select some items to export and try again.", button=['Okay'])
                 return False                
