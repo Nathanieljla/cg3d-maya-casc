@@ -23,14 +23,112 @@ from . import fbx
 
 
 
+def _store_qrt_template(domain_scene, qrt_json):
+    """Save a quick-rig template on the rig-mode AnimationInfo object.
+
+    The Python quick rigging tool reads this (QrtInfo.qrt_json) when it opens,
+    in place of picking a template from the app's autorig_templates folder.
+    This mirrors prototypes.rigs.qrt._qrt.Qrt.add_qrt_json.
+    """
+    def mod(scene):
+        anim_infos = scene.bv.get_behaviours('AnimationInfo')
+        if len(anim_infos) != 1:
+            raise Exception('Expected one AnimationInfo, found {}'.format(len(anim_infos)))
+
+        obj_id = scene.bv.get_behaviour_owner(anim_infos[0])
+        qrt_info_id = scene.bv.behaviour_id(obj_id, 'QrtInfo')
+        if not qrt_info_id:
+            qrt_info_id = scene.be.add_behaviour(obj_id, 'QrtInfo')
+        scene.be.set_behaviour_string(qrt_info_id, 'qrt_json', qrt_json)
+
+    return pycsc.wrap(domain_scene).edit('Add Maya QRT template', mod)
+
+
+def _get_qrt_model():
+    """The open Python quick rigging tool model, or None."""
+    try:
+        import shiboken6
+        import models.quick_rig_tool.model as qrt_model
+    except ImportError:
+        return None
+
+    model_ref = getattr(qrt_model.AutoRiggingTool, 'active_instance', None)
+    model = model_ref() if model_ref else None
+    if model is None or not shiboken6.isValid(model):
+        return None
+    return model
+
+
+def _call_later(func, *args):
+    """Run func on a later tick of Cascadeur's GUI event loop.
+
+    Maya sends commands through `cascadeur.exe --run-python-code`, and the
+    running app executes that code inside its request handler. Rig mode turned
+    on there never switches the UI to the rigging workspace (the rig itself is
+    fine); turned on one tick later, it does.
+    """
+    def run():
+        try:
+            func(*args)
+        except Exception:
+            import traceback
+            traceback.print_exc()
+
+    try:
+        from PySide6 import QtCore
+    except ImportError:
+        QtCore = None
+    if QtCore is not None and QtCore.QCoreApplication.instance() is not None:
+        QtCore.QTimer.singleShot(0, run)
+        return
+
+    try:
+        from events import scene_idle_manager
+    except ImportError:
+        # No way to defer in this build: run now (the rig still builds, but
+        # the rigging workspace may not appear until the tab is switched).
+        run()
+        return
+
+    subscription = None
+
+    def run_once(*_):
+        scene_idle_manager.unsubscribe(subscription)
+        run()
+
+    subscription = scene_idle_manager.subscribe(run_once)
+
+
 def _import_maya_qrig_file(file_path):
     scene_manager = csc.app.get_application().get_scene_manager()
     application_scene = scene_manager.current_scene()
-    rm_on.run_raw(application_scene.domain_scene(), [0.0, 0.5, 0.0])
+    domain_scene = application_scene.domain_scene()
+    rm_on.run_raw(domain_scene, [0.0, 0.5, 0.0])
     rig_tool = csc.app.get_application().get_tools_manager().get_tool('RiggingToolWindowTool').editor(application_scene)
+
+    if hasattr(rig_tool, 'load_template_by_fileName'):
+        # Cascadeur builds with the C++ quick rigging tool.
+        rig_tool.open_quick_rigging_tool()
+        rig_tool.load_template_by_fileName(file_path)
+        #rig_tool.generate_rig_elements()
+        return
+
+    # Builds with the Python quick rigging tool (2027 removed the C++
+    # template/generate bindings). Store the template where the tool reads it
+    # on open, open it, then press "Add Rig Elements" for the user.
+    with open(file_path, 'r', encoding='utf-8') as qrig_file:
+        qrt_json = qrig_file.read()
+
+    if not _store_qrt_template(domain_scene, qrt_json):
+        domain_scene.error("Couldn't store the Maya quick rig template. See the log.")
+        return
+
     rig_tool.open_quick_rigging_tool()
-    rig_tool.load_template_by_fileName(file_path)
-    rig_tool.generate_rig_elements()
+    qrt_model = _get_qrt_model()
+    if qrt_model is None:
+        domain_scene.error("The quick rigging tool didn't open; can't generate the rig.")
+        return
+    #qrt_model.createPrototype()
     
     
 def _get_object_by_id(object_list, maya_id):
@@ -375,7 +473,7 @@ def _import_maya(new_scene, import_filter: fbx.FbxFilterType):
     #this can stay inside the file loop and we can move the texture loading to the end.
     if import_rig:
         print("attempting rig import")
-        _import_maya_qrig_file(import_rig)
+        _call_later(_import_maya_qrig_file, import_rig)
 
 
 def update_models():

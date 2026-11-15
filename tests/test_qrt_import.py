@@ -88,6 +88,71 @@ class QRigImportMappingTests(unittest.TestCase):
             self.module._match_imported_joint(entry, joints),
         )
 
+    def test_qrig_export_uses_leaf_names_and_joint_only_parent_paths(self):
+        class FakeNode:
+            def __init__(self, name, node_type, parent=None):
+                self._name = name
+                self._type = node_type
+                self._parent = parent
+
+            def name(self):
+                return self._name
+
+            def short_name(self):
+                return self._name.rsplit("|", 1)[-1]
+
+            def type(self):
+                return self._type
+
+            def getParent(self):
+                return self._parent
+
+        proxy_root = FakeNode("|casc:root", "transform")
+        skeleton_group = FakeNode(
+            "|casc:root|casc:skel_root", "transform", proxy_root
+        )
+        root_joint = FakeNode(
+            "|casc:root|casc:skel_root|casc:root",
+            "joint",
+            skeleton_group,
+        )
+        pelvis = FakeNode(
+            "|casc:root|casc:skel_root|casc:root|casc:pelvis",
+            "joint",
+            root_joint,
+        )
+        spine = FakeNode(
+            "|casc:root|casc:skel_root|casc:root|casc:pelvis|casc:spine_01",
+            "joint",
+            pelvis,
+        )
+
+        entry = self.module._get_joint_entry(
+            "", self.module._joint_struct(), spine
+        )
+
+        self.assertEqual("casc:spine_01", entry["Joint name"])
+        self.assertEqual(
+            ["casc:root", "casc:pelvis"], entry["Joint path"]
+        )
+
+    def test_twist_sections_match_cascadeur_source_bone_groups(self):
+        sections = self.module.TWIST_SECTIONS
+
+        self.assertEqual(
+            [
+                "Left arm", "Left arm", "Right arm", "Right arm",
+                "Left leg", "Left leg", "Right leg", "Right leg",
+            ],
+            [name for name, unused_keys in sections],
+        )
+        self.assertTrue(all(keys for unused_name, keys in sections))
+        for unused_name, keys in sections:
+            self.assertEqual(
+                1,
+                len({self.module.HIK_ATTRS[key] for key in keys}),
+            )
+
     def test_spline_ik_expands_all_intermediate_spine_slots(self):
         parents = {
             "|root|pelvis": "|root",

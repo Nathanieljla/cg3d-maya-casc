@@ -321,6 +321,49 @@ TWIST_AXES = {
 }
 
 
+# Cascadeur's QRT writer emits one twist section per source bone. Section
+# labels repeat because the upper/lower limb distinction is carried by each
+# entry's Bone name (arm_l vs forearm_l, thigh_l vs calf_l, and so on).
+TWIST_SECTIONS = (
+    ('Left arm', (
+        'LeafLeftArmRoll1', 'LeafLeftArmRoll2', 'LeafLeftArmRoll3',
+        'LeafLeftArmRoll4', 'LeafLeftArmRoll5',
+    )),
+    ('Left arm', (
+        'LeafLeftForeArmRoll1', 'LeafLeftForeArmRoll2',
+        'LeafLeftForeArmRoll3', 'LeafLeftForeArmRoll4',
+        'LeafLeftForeArmRoll5',
+    )),
+    ('Right arm', (
+        'LeafRightArmRoll1', 'LeafRightArmRoll2', 'LeafRightArmRoll3',
+        'LeafRightArmRoll4', 'LeafRightArmRoll5',
+    )),
+    ('Right arm', (
+        'LeafRightForeArmRoll1', 'LeafRightForeArmRoll2',
+        'LeafRightForeArmRoll3', 'LeafRightForeArmRoll4',
+        'LeafRightForeArmRoll5',
+    )),
+    ('Left leg', (
+        'LeafLeftUpLegRoll1', 'LeafLeftUpLegRoll2',
+        'LeafLeftUpLegRoll3', 'LeafLeftUpLegRoll4',
+        'LeafLeftUpLegRoll5',
+    )),
+    ('Left leg', (
+        'LeafLeftLegRoll1', 'LeafLeftLegRoll2', 'LeafLeftLegRoll3',
+        'LeafLeftLegRoll4', 'LeafLeftLegRoll5',
+    )),
+    ('Right leg', (
+        'LeafRightUpLegRoll1', 'LeafRightUpLegRoll2',
+        'LeafRightUpLegRoll3', 'LeafRightUpLegRoll4',
+        'LeafRightUpLegRoll5',
+    )),
+    ('Right leg', (
+        'LeafRightLegRoll1', 'LeafRightLegRoll2', 'LeafRightLegRoll3',
+        'LeafRightLegRoll4', 'LeafRightLegRoll5',
+    )),
+)
+
+
 _ACTIVE_CHARACTER_NODE = None
 _ACTIVE_USER_DATA = None
 
@@ -328,7 +371,11 @@ _ACTIVE_USER_DATA = None
 def _get_list_of_parents(transform, input_list):
     parent = transform.getParent()
     if parent is not None:
-        input_list.append(parent.name())
+        # QRT stores a joint hierarchy, not Maya's surrounding transform
+        # containers. Full DAG paths and non-joint proxy groups make some
+        # current Cascadeur parsers stop resolving entries partway through.
+        if parent.type() == 'joint':
+            input_list.append(parent.short_name())
         _get_list_of_parents(parent, input_list)
         
     else:
@@ -372,7 +419,7 @@ def _get_joint_entry(hik_key, joint_struct = None, joint=None):
     parent_list = []
     _get_list_of_parents(joint, parent_list)
     
-    joint_struct['Joint name'] = joint.name().lstrip('|')
+    joint_struct['Joint name'] = joint.short_name()
     joint_struct['Joint path'] = parent_list
     return joint_struct
     
@@ -547,39 +594,15 @@ def get_qrig_struct(user_data = None):
     
     twists_title = {
         'Title' : 'Twist bones',
-        'Sections' :  [
-            _get_section('Left arm',
-                         ['LeafLeftArmRoll1', 'LeafLeftArmRoll2',
-                          'LeafLeftArmRoll3', 'LeafLeftArmRoll4',
-                          'LeafLeftArmRoll5',
-                          'LeafLeftForeArmRoll1', 'LeafLeftForeArmRoll2',
-                          'LeafLeftForeArmRoll3', 'LeafLeftForeArmRoll4',
-                          'LeafLeftForeArmRoll5'],
-                         twist_data=True, user_data=user_data),
-            
-            _get_section('Right arm', ['LeafRightArmRoll1', 'LeafRightArmRoll2',
-                          'LeafRightArmRoll3', 'LeafRightArmRoll4',
-                          'LeafRightArmRoll5',
-                          'LeafRightForeArmRoll1', 'LeafRightForeArmRoll2',
-                          'LeafRightForeArmRoll3', 'LeafRightForeArmRoll4',
-                          'LeafRightForeArmRoll5'],
-                         twist_data=True, user_data=user_data),
-            
-            _get_section('Left leg', ['LeafLeftUpLegRoll1', 'LeafLeftUpLegRoll2',
-                          'LeafLeftUpLegRoll3', 'LeafLeftUpLegRoll4',
-                          'LeafLeftUpLegRoll5',
-                          'LeafLeftLegRoll1', 'LeafLeftLegRoll2',
-                          'LeafLeftLegRoll3', 'LeafLeftLegRoll4',
-                          'LeafLeftLegRoll5'],
-                         twist_data=True, user_data=user_data),
-            _get_section('Right leg', ['LeafRightUpLegRoll1', 'LeafRightUpLegRoll2',
-                          'LeafRightUpLegRoll3', 'LeafRightUpLegRoll4',
-                          'LeafRightUpLegRoll5',
-                          'LeafRightLegRoll1', 'LeafRightLegRoll2',
-                          'LeafRightLegRoll3', 'LeafRightLegRoll4',
-                          'LeafRightLegRoll5'],
-                         twist_data=True, user_data=user_data),
-            ]
+        'Sections' : [
+            _get_section(
+                section_name,
+                keys,
+                twist_data=True,
+                user_data=user_data,
+            )
+            for section_name, keys in TWIST_SECTIONS
+        ]
     } 
     
     root = {}
