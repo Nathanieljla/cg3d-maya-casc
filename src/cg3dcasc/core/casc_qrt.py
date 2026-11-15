@@ -628,17 +628,29 @@ def _qrt_entries(document):
 
 
 def _qrt_hik_entries(document):
-    """Map ordinary QRT bone semantics to Maya HIK slots."""
+    """Map QRT bone semantics, including twist order, to Maya HIK slots."""
     reverse = {}
+    twist_slots = {}
     for hik_name, qrt_name in HIK_ATTRS.items():
-        if qrt_name and not hik_name.startswith('Leaf'):
+        if not qrt_name:
+            continue
+        if hik_name.startswith('Leaf'):
+            twist_slots.setdefault(qrt_name, []).append(hik_name)
+        else:
             reverse.setdefault(qrt_name, hik_name)
 
     result = {}
+    twist_indices = {}
     for title, unused_section, entry in _qrt_entries(document):
+        qrt_name = entry.get('Bone name')
         if title.lower() == 'twist bones':
+            index = twist_indices.get(qrt_name, 0)
+            candidates = twist_slots.get(qrt_name, [])
+            if index < len(candidates) and entry.get('Joint name'):
+                result[candidates[index]] = entry
+                twist_indices[qrt_name] = index + 1
             continue
-        hik_name = reverse.get(entry.get('Bone name'))
+        hik_name = reverse.get(qrt_name)
         if hik_name and entry.get('Joint name'):
             result[hik_name] = entry
     return result
@@ -781,21 +793,38 @@ def import_qrig_character(qrig_path, hikmap_path, joint_names, export_node):
     if not mapping:
         cmds.error("Cascadeur QRT data did not match any imported joints.")
 
+    qrig_data = QRigData.get_data(export_node)
+    existing_characters = qrig_data.characterNode.inputs() if qrig_data else []
+    if len(existing_characters) > 1:
+        cmds.error("Cascadeur export data is connected to multiple HIK characters.")
+
     hik.load_hik()
-    previous = set(cmds.ls(type='HIKCharacterNode') or [])
-    mel.eval('hikCreateDefinition')
-    created = [
-        node
-        for node in (cmds.ls(type='HIKCharacterNode') or [])
-        if node not in previous
-    ]
-    if len(created) != 1:
-        cmds.error("Failed to create an HIK character definition for Cascadeur data.")
-    character = created[0]
+    if existing_characters:
+        character = existing_characters[0].name()
+    else:
+        previous = set(cmds.ls(type='HIKCharacterNode') or [])
+        mel.eval('hikCreateDefinition')
+        created = [
+            node
+            for node in (cmds.ls(type='HIKCharacterNode') or [])
+            if node not in previous
+        ]
+        if len(created) != 1:
+            cmds.error("Failed to create an HIK character definition for Cascadeur data.")
+        character = created[0]
+
     indices = hik.get_node_index_mapping()
     for hik_name, joint in mapping.items():
         index = indices.get(hik_name)
         if index is None:
+            continue
+        current = cmds.listConnections(
+            '{}.{}'.format(character, hik_name),
+            source=True,
+            destination=False,
+            type='joint',
+        ) or []
+        if joint in (cmds.ls(current, long=True) or []):
             continue
         safe_joint = joint.replace('"', '\\"')
         safe_character = character.replace('"', '\\"')
@@ -805,12 +834,16 @@ def import_qrig_character(qrig_path, hikmap_path, joint_names, export_node):
             )
         )
 
-    qrig_data = QRigData.get_data(export_node) or QRigData.add_data(export_node)
-    Node(character).message.connect(qrig_data.characterNode, force=True)
+    if qrig_data is None:
+        qrig_data = QRigData.add_data(export_node)
+    if not qrig_data.characterNode.inputs():
+        Node(character).message.connect(qrig_data.characterNode, force=True)
     spine_names = ['Spine'] + ['Spine{}'.format(index) for index in range(1, 10)]
     spine_joints = [mapping[name] for name in spine_names if name in mapping]
     if spine_joints:
-        Node(spine_joints[-1]).message.connect(qrig_data.chestJoint, force=True)
+        chest_joint = Node(spine_joints[-1])
+        if qrig_data.chestJoint.inputs() != [chest_joint]:
+            chest_joint.message.connect(qrig_data.chestJoint, force=True)
     return Node(character)
 
 

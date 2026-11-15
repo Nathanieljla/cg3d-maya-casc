@@ -200,6 +200,26 @@ class MayaCleanProcessSmokeTests(unittest.TestCase):
             "head",
         ):
             joint_names.append(cmds.joint(name=name))
+
+        cmds.select("spine_03", replace=True)
+        clavicle = cmds.joint(name="clavicle_l")
+        upper_arm = cmds.joint(name="upperarm_l")
+        lower_arm = cmds.joint(name="lowerarm_l")
+        hand = cmds.joint(name="hand_l")
+        cmds.select(upper_arm, replace=True)
+        upper_twist_one = cmds.joint(name="upperarm_twist_01_l")
+        cmds.select(upper_arm, replace=True)
+        upper_twist_two = cmds.joint(name="upperarm_twist_02_l")
+        joint_names.extend(
+            [
+                clavicle,
+                upper_arm,
+                lower_arm,
+                hand,
+                upper_twist_one,
+                upper_twist_two,
+            ]
+        )
         joint_paths = cmds.ls(joint_names, long=True, type="joint") or []
         export_set, unused_data = CascExportData.create_node(nodeType="objectSet")
 
@@ -216,6 +236,28 @@ class MayaCleanProcessSmokeTests(unittest.TestCase):
                                 {"Bone name": "chest", "Joint name": "spine_03"},
                                 {"Bone name": "neck", "Joint name": "neck_01"},
                                 {"Bone name": "head", "Joint name": "head"},
+                                {"Bone name": "clavicle_l", "Joint name": "clavicle_l"},
+                                {"Bone name": "arm_l", "Joint name": "upperarm_l"},
+                                {"Bone name": "forearm_l", "Joint name": "lowerarm_l"},
+                                {"Bone name": "hand_l", "Joint name": "hand_l"},
+                            ],
+                        }
+                    ],
+                },
+                {
+                    "Title": "Twist bones",
+                    "Sections": [
+                        {
+                            "Section": "Left arm",
+                            "Names": [
+                                {
+                                    "Bone name": "arm_l",
+                                    "Joint name": "upperarm_twist_01_l",
+                                },
+                                {
+                                    "Bone name": "arm_l",
+                                    "Joint name": "upperarm_twist_02_l",
+                                },
                             ],
                         }
                     ],
@@ -238,6 +280,12 @@ class MayaCleanProcessSmokeTests(unittest.TestCase):
                 joint_paths,
                 export_set,
             )
+            second_character = casc_qrt.import_qrig_character(
+                qrig_path,
+                hikmap_path,
+                joint_paths,
+                export_set,
+            )
 
         self.assertEqual("HIKCharacterNode", cmds.nodeType(character.name()))
         qrig_data = QRigData.get_data(export_set)
@@ -251,6 +299,20 @@ class MayaCleanProcessSmokeTests(unittest.TestCase):
                 type="joint",
             ) or []
             self.assertEqual([joint.rsplit("|", 1)[-1]], inputs)
+        for slot, joint in (
+            ("LeafLeftArmRoll1", upper_twist_one),
+            ("LeafLeftArmRoll2", upper_twist_two),
+        ):
+            inputs = cmds.listConnections(
+                character.name() + "." + slot,
+                source=True,
+                destination=False,
+                type="joint",
+            ) or []
+            self.assertEqual([joint], inputs)
+
+        self.assertEqual(character, second_character)
+        self.assertEqual(1, len(cmds.ls(type="HIKCharacterNode") or []))
         self.assertFalse(cmds.ls(type="HIKControlSetNode") or [])
 
 

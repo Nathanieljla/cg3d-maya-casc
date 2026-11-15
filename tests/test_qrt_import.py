@@ -42,6 +42,40 @@ class QRigImportMappingTests(unittest.TestCase):
         self.assertEqual("spine_03", mapped["Spine1"]["Joint name"])
         self.assertEqual("neck_01", mapped["Neck"]["Joint name"])
 
+    def test_twist_bones_map_in_order_to_hik_roll_slots(self):
+        document = {
+            "Document": [
+                {
+                    "Title": "Twist bones",
+                    "Sections": [
+                        {
+                            "Section": "Left arm",
+                            "Names": [
+                                {"Bone name": "arm_l", "Joint name": "upperarm_twist_01_l"},
+                                {"Bone name": "arm_l", "Joint name": "upperarm_twist_02_l"},
+                                {"Bone name": "forearm_l", "Joint name": "lowerarm_twist_01_l"},
+                            ],
+                        }
+                    ],
+                }
+            ]
+        }
+
+        mapped = self.module._qrt_hik_entries(document)
+
+        self.assertEqual(
+            "upperarm_twist_01_l",
+            mapped["LeafLeftArmRoll1"]["Joint name"],
+        )
+        self.assertEqual(
+            "upperarm_twist_02_l",
+            mapped["LeafLeftArmRoll2"]["Joint name"],
+        )
+        self.assertEqual(
+            "lowerarm_twist_01_l",
+            mapped["LeafLeftForeArmRoll1"]["Joint name"],
+        )
+
     def test_joint_paths_disambiguate_duplicate_short_names(self):
         entry = {
             "Joint name": "hand",
