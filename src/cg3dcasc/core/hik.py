@@ -1,4 +1,5 @@
 from enum import Enum
+import json
 
 from maya import cmds, mel
 
@@ -124,9 +125,27 @@ def set_character(character):
 
 def set_character_source(character, source: SourceType):
     """Set the HIK UI to a specific character and source"""
-    character_list, source_list = _get_hik_windows()        
     character_name = _get_character_name(character)
 
+    # Animation FBX import must be able to disable the exact matched
+    # character even when the HIK window is closed (or unavailable in
+    # mayapy). Driving the character through the UI menu made the import
+    # depend on display labels and failed before FBXImport was reached.
+    if source == SourceType.NONE:
+        load_hik()
+        quoted_name = json.dumps(character_name)
+        mel.eval(
+            'hikSetCurrentCharacter({0}); '
+            'hikSetCurrentSource(hikNoneString()); '
+            'hikEnableCharacter({0}, 2);'.format(quoted_name)
+        )
+        try:
+            mel.eval('hikUpdateSourceList(); hikUpdateContextualUI();')
+        except RuntimeError:
+            pass
+        return
+
+    character_list, source_list = _get_hik_windows()
     current_character = cmds.optionMenuGrp(character_list, query=True, value=True)
     if current_character != character_name:
         _set_list(character_list, character_name, 'hikUpdateCurrentCharacterFromUI()')

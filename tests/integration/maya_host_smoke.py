@@ -214,6 +214,10 @@ class MayaCleanProcessSmokeTests(unittest.TestCase):
         upper_twist_one = cmds.joint(name="upperarm_twist_01_l")
         cmds.select(upper_arm, replace=True)
         upper_twist_two = cmds.joint(name="upperarm_twist_02_l")
+        cmds.select(hand, replace=True)
+        left_weapon = cmds.joint(name="weapon_l")
+        cmds.select("pelvis", replace=True)
+        right_weapon = cmds.joint(name="weapon_r")
         joint_names.extend(
             [
                 clavicle,
@@ -222,6 +226,8 @@ class MayaCleanProcessSmokeTests(unittest.TestCase):
                 hand,
                 upper_twist_one,
                 upper_twist_two,
+                left_weapon,
+                right_weapon,
             ]
         )
         joint_paths = cmds.ls(joint_names, long=True, type="joint") or []
@@ -237,13 +243,15 @@ class MayaCleanProcessSmokeTests(unittest.TestCase):
                             "Names": [
                                 {"Bone name": "pelvis", "Joint name": "pelvis"},
                                 {"Bone name": "stomach", "Joint name": "spine_01"},
-                                {"Bone name": "chest", "Joint name": "spine_03"},
+                                {"Bone name": "chest", "Joint name": "spine_02"},
                                 {"Bone name": "neck", "Joint name": "neck_01"},
                                 {"Bone name": "head", "Joint name": "head"},
                                 {"Bone name": "clavicle_l", "Joint name": "clavicle_l"},
                                 {"Bone name": "arm_l", "Joint name": "upperarm_l"},
                                 {"Bone name": "forearm_l", "Joint name": "lowerarm_l"},
                                 {"Bone name": "hand_l", "Joint name": "hand_l"},
+                                {"Bone name": "weapon_l", "Joint name": "weapon_l"},
+                                {"Bone name": "weapon_r", "Joint name": "weapon_r"},
                             ],
                         }
                     ],
@@ -314,6 +322,18 @@ class MayaCleanProcessSmokeTests(unittest.TestCase):
         ]
         self.assertFalse(
             any(record.startswith("QRigTwistData:") for record in records)
+        )
+        self.assertEqual(
+            ["spine_02"],
+            [node.short_name() for node in qrig_data.chestJoint.inputs()],
+        )
+        self.assertEqual(
+            ["weapon_l"],
+            [node.short_name() for node in qrig_data.leftWeapon.inputs()],
+        )
+        self.assertEqual(
+            ["weapon_r"],
+            [node.short_name() for node in qrig_data.rightWeapon.inputs()],
         )
         for slot, joint in zip(("Spine", "Spine1", "Spine2"), joint_paths[1:4]):
             inputs = cmds.listConnections(

@@ -88,6 +88,31 @@ class QRigImportMappingTests(unittest.TestCase):
             self.module._match_imported_joint(entry, joints),
         )
 
+    def test_qrig_entries_include_semantic_chest_and_weapon_bones(self):
+        document = {
+            "Document": [
+                {
+                    "Title": "Body",
+                    "Sections": [
+                        {
+                            "Section": "Body",
+                            "Names": [
+                                {"Bone name": "chest", "Joint name": "spine_04"},
+                                {"Bone name": "weapon_l", "Joint name": "weapon_l"},
+                                {"Bone name": "weapon_r", "Joint name": "weapon_r"},
+                            ],
+                        }
+                    ],
+                }
+            ]
+        }
+
+        mapped = self.module._qrt_qrig_entries(document)
+
+        self.assertEqual("spine_04", mapped["chestJoint"]["Joint name"])
+        self.assertEqual("weapon_l", mapped["leftWeapon"]["Joint name"])
+        self.assertEqual("weapon_r", mapped["rightWeapon"]["Joint name"])
+
     def test_qrig_export_uses_leaf_names_and_joint_only_parent_paths(self):
         class FakeNode:
             def __init__(self, name, node_type, parent=None):

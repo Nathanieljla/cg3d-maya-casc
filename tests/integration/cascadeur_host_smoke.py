@@ -17,6 +17,12 @@ site_root = pathlib.Path(ARGS["site_root"]).resolve()
 if str(site_root) not in sys.path:
     sys.path.insert(0, str(site_root))
 
+# Cascadeur startup may already have loaded command modules from another
+# scripts directory. Force command discovery through this checkout.
+for module_name in list(sys.modules):
+    if module_name == "cg3dcmds" or module_name.startswith("cg3dcmds."):
+        del sys.modules[module_name]
+
 import cg3dmaya
 from cg3dmaya import common, fbx as maya_fbx, maya_export, maya_import
 
@@ -160,6 +166,16 @@ if unreal_scene_path.is_file():
         first_export_set == second_export_set,
     )
     root_behaviour = first_export_set.get_behaviour_by_name(common.MAYA_ROOTS)
+    root_objects = [
+        reference.object for reference in root_behaviour.behaviours.get()
+    ]
+    check(
+        "character export set stores only top-level roots",
+        bool(root_objects)
+        and all(item.parent is None for item in root_objects)
+        and len(root_objects) < len(export_content),
+        [item.name for item in root_objects],
+    )
     export_selection = []
     hierarchy = importlib.import_module("common.hierarchy")
     for reference in root_behaviour.behaviours.get():

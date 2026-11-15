@@ -22,6 +22,7 @@ class FakeCommands(types.ModuleType):
         self.skin_calls = []
         self.set_calls = []
         self.connected = []
+        self.parent_constraints = []
         self.warnings = []
 
     def about(self, **kwargs):
@@ -37,13 +38,17 @@ class FakeCommands(types.ModuleType):
         return []
 
     def listConnections(self, plug, **kwargs):
-        return self.connections.get(plug, [])
+        result = self.connections.get(plug, [])
+        return list(result) if isinstance(result, list) else result
 
     def dagPose(self, influences, **kwargs):
         return "newBindPose"
 
     def connectAttr(self, source, destination, **kwargs):
         self.connected.append((source, destination, kwargs))
+
+    def parentConstraint(self, source, destination, **kwargs):
+        self.parent_constraints.append((source, destination, kwargs))
 
     def warning(self, message):
         self.warnings.append(message)
@@ -226,6 +231,63 @@ class ProxyUtilityTests(unittest.TestCase):
                 )
             ],
             create.calls,
+        )
+
+    def test_constrain_proxy_uses_nodes_returned_by_udata_query_directly(self):
+        module, cmds, mayautil, unused_materials = self._load()
+
+        class Value:
+            def __init__(self, value):
+                self.value = value
+
+            def get(self):
+                return self.value
+
+        class Message:
+            def __init__(self, values):
+                self.values = values
+
+            def inputs(self):
+                return self.values
+
+        class HostNode:
+            def __init__(self, name):
+                self._name = name
+
+            def name(self):
+                return self._name
+
+        source = HostNode("sourceJoint")
+        root = HostNode("proxyRoot")
+        root.rootType = Value(1)
+        proxy = HostNode("proxyJoint")
+        proxy.proxySource = Message([source])
+        descendants = CallRecorder([proxy])
+        mayautil.descendants = descendants
+        module.preferences.get = lambda: types.SimpleNamespace(
+            derig_maintain_offset=True
+        )
+        module.cg3dguru.udata.Utils.get_nodes_with_data = (
+            lambda *args, **kwargs: (
+                [root] if kwargs.get("data_class") is module.ProxyRoot else [proxy]
+            )
+        )
+
+        try:
+            module.constrain_proxy()
+        finally:
+            sys.modules.pop("_proxy_test_host.utils", None)
+
+        self.assertEqual([(([root],), {})], descendants.calls)
+        self.assertEqual(
+            [
+                (
+                    "sourceJoint",
+                    "proxyJoint",
+                    {"maintainOffset": True},
+                )
+            ],
+            cmds.parent_constraints,
         )
 
 

@@ -131,6 +131,11 @@ def _rig_export_content(scene, rig_info):
     return joints | meshes
 
 
+def _rig_export_roots(export_objects):
+    """Reduce character content to the top-level roots stored by normal sets."""
+    return common._get_roots_from_selected(set(export_objects))
+
+
 def _spline_ik_chains(scene, rig_joints):
     """Return SplineIK joint names belonging to this character.
 
@@ -155,6 +160,7 @@ def _spline_ik_chains(scene, rig_joints):
 def _new_rig_export_set(scene, rig_info, export_objects):
     """Create the persistent Maya export set used by later updates."""
     result = None
+    export_roots = _rig_export_roots(export_objects)
 
     def create(edit_scene):
         nonlocal result
@@ -163,7 +169,7 @@ def _new_rig_export_set(scene, rig_info, export_objects):
             edit_scene,
             set_name,
             str(uuid.uuid1()),
-            export_objects,
+            export_roots,
         )
 
     scene.edit('Create Maya Character Export Set', create)
@@ -174,10 +180,11 @@ def _matching_rig_export_set(scene, rig_info, export_objects):
     """Find an export set whose members exactly match this character."""
     all_sets, unused_selected_sets = common.get_export_sets(scene)
     expected_name = '{}_CSC_EXPORT'.format(rig_info.object.name.rstrip('_'))
+    export_roots = _rig_export_roots(export_objects)
     matches = [
         export_set
         for export_set in all_sets
-        if common.get_set_members(export_set) == set(export_objects)
+        if common.get_set_members(export_set) == export_roots
     ]
     if not matches:
         return None

@@ -45,6 +45,11 @@ class ExportData:
         return self._node
 
 
+class ExportNode:
+    def __init__(self, identifier=""):
+        self.cscDataId = Identifier(identifier)
+
+
 class FakeCommands(types.ModuleType):
     def __init__(self):
         super().__init__("maya.cmds")
@@ -192,10 +197,13 @@ class MayaImportTests(unittest.TestCase):
             sys.modules.pop("_maya_import_host.casc_import", None)
 
     def test_existing_export_set_receives_animation_and_disables_hik_source(self):
-        existing = ExportData("uuid")
+        other = ExportNode("other-uuid")
+        existing = ExportNode("uuid")
         module, cmds, unused_send, import_fbx, hik_set, unused_data, character = self._load(
-            [existing]
+            [other, existing]
         )
+        character_lookup = CallRecorder(character)
+        module.common.get_character_node = character_lookup
         cmds.scene_sets = ["existingSet"]
         cmds.assembly_results = [["root"], ["root"]]
         module.get_import_files = lambda: {
@@ -206,8 +214,43 @@ class MayaImportTests(unittest.TestCase):
         finally:
             sys.modules.pop("_maya_import_host.casc_import", None)
         self.assertEqual([((character, "none"), {})], hik_set.calls)
+        self.assertEqual(
+            [((existing.cscDataId,), {})],
+            character_lookup.calls,
+        )
         self.assertEqual([(("animation.fbx",), {})], import_fbx.calls)
         self.assertEqual([], cmds.set_calls)
+
+    def test_existing_export_set_is_reused_for_qrig_sidecars(self):
+        existing = ExportNode("uuid")
+        module, cmds, unused_send, unused_fbx, unused_hik, unused_data, unused_char = self._load(
+            [existing]
+        )
+        cmds.scene_sets = ["existingSet"]
+        cmds.assembly_results = [["root"], ["root"]]
+        module.get_import_files = lambda: {
+            "SET.uuid": {
+                "fbx": "animation.fbx",
+                "qrigcasc": "character.qrigcasc",
+                "hikmap": "character.hikmap",
+            }
+        }
+        try:
+            module.import_fbx()
+        finally:
+            sys.modules.pop("_maya_import_host.casc_import", None)
+
+        self.assertEqual(
+            [
+                ((
+                    "character.qrigcasc",
+                    "character.hikmap",
+                    [],
+                    existing,
+                ), {})
+            ],
+            module.casc_qrt.import_qrig_character.calls,
+        )
 
     def test_unknown_export_id_creates_set_for_new_roots(self):
         module, cmds, unused_send, import_fbx, unused_hik, created, unused_char = self._load()

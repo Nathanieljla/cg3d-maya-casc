@@ -56,7 +56,12 @@ def material_modules(cmds):
     open_maya = make_module("maya.api.OpenMaya")
     maya_api.OpenMaya = open_maya
     cg3dguru = make_package("cg3dguru")
-    cg3dguru_maya = make_module("cg3dguru.maya", node_name=str)
+    attribute_type = type("Attribute", (), {})
+    cg3dguru_maya = make_module(
+        "cg3dguru.maya",
+        Attribute=attribute_type,
+        node_name=str,
+    )
     cg3dcasc = make_package("cg3dcasc", SRC_ROOT)
     host_package = make_package("_material_test_core", SRC_ROOT / "core")
     host_maya = make_module("_material_test_core.maya", set_members=lambda unused: [])

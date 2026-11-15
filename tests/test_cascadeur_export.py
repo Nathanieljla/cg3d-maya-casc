@@ -70,6 +70,14 @@ class CascadeurExportTests(unittest.TestCase):
         scene = scene or Scene()
         export_fbx = CallRecorder()
 
+        def selected_roots(objects):
+            roots = set()
+            for obj in objects:
+                while obj.parent is not None:
+                    obj = obj.parent
+                roots.add(obj)
+            return roots
+
         def write_export(*args, **kwargs):
             export_fbx(*args, **kwargs)
             pathlib.Path(args[0]).write_bytes(b"fbx")
@@ -107,6 +115,7 @@ class CascadeurExportTests(unittest.TestCase):
             _add_export_settings=lambda behaviour: None,
             get_export_sets=lambda unused_scene: (set(), set()),
             get_set_members=lambda unused_set: set(),
+            _get_roots_from_selected=selected_roots,
         )
         server = make_module(
             "_cascadeur_export_host.server", send_to_maya=send_to_maya
@@ -330,11 +339,37 @@ class CascadeurExportTests(unittest.TestCase):
         finally:
             sys.modules.pop("_cascadeur_export_host.maya_export", None)
 
+    def test_new_character_export_set_stores_only_top_level_roots(self):
+        module, scene, unused_export, unused_send, unused_settings = self._load()
+        character_root = Item("SKM_Manny_Simple")
+        skeleton_root = Item("root", parent=character_root)
+        mesh = Item("SKM_Manny_Simple", parent=character_root)
+        rig_info = types.SimpleNamespace(object=Item("Rig info"))
+        export_set = Item("Rig info_CSC_EXPORT")
+        create_data = CallRecorder(export_set)
+        module.common._create_data = create_data
+
+        try:
+            result = module._new_rig_export_set(
+                scene,
+                rig_info,
+                {skeleton_root, mesh},
+            )
+
+            self.assertIs(export_set, result)
+            self.assertEqual(
+                {character_root},
+                create_data.calls[0][0][3],
+            )
+        finally:
+            sys.modules.pop("_cascadeur_export_host.maya_export", None)
+
     def test_character_export_writes_qrt_spline_map_and_influenced_mesh(self):
         module, scene, unused_export, unused_send, unused_settings = self._load()
-        joint_a = Item("pelvis")
-        joint_b = Item("spine_01")
-        mesh = Item("bodyMesh")
+        character_root = Item("characterRoot")
+        joint_a = Item("pelvis", parent=character_root)
+        joint_b = Item("spine_01", parent=joint_a)
+        mesh = Item("bodyMesh", parent=character_root)
         rig_info = types.SimpleNamespace(
             object=Item("UnrealRig"),
             qrt_json=Data('{"Document": []}'),

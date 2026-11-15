@@ -9,7 +9,7 @@ import shutil
 from maya import cmds
 from maya.api import OpenMaya as om
 
-from cg3dguru.maya import node_name
+from cg3dguru.maya import Attribute, node_name
 
 from cg3dcasc.material_data import FilamentMaterialData, MaterialConverter
 
@@ -309,7 +309,11 @@ def get_textures(objs, export_nodes=None):
     export_nodes = export_nodes or []
     preferred_files = set()
     for export_data in export_nodes:
-        object_set = export_data.node() if hasattr(export_data, "node") else export_data
+        object_set = (
+            export_data.node()
+            if isinstance(export_data, Attribute)
+            else export_data
+        )
         preferred_files.update(
             member.name()
             for member in set_members(object_set)

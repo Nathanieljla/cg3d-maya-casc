@@ -679,6 +679,21 @@ def _qrt_hik_entries(document):
     return result
 
 
+def _qrt_qrig_entries(document):
+    """Return QRT entries that configure Maya-only QRigData joint options."""
+    semantics = {
+        'chest': 'chestJoint',
+        'weapon_l': 'leftWeapon',
+        'weapon_r': 'rightWeapon',
+    }
+    result = {}
+    for unused_title, unused_section, entry in _qrt_entries(document):
+        attr_name = semantics.get(entry.get('Bone name'))
+        if attr_name and entry.get('Joint name'):
+            result.setdefault(attr_name, entry)
+    return result
+
+
 def _match_imported_joint(entry, joint_names):
     """Resolve a QRT joint entry against FBX-imported Maya DAG paths."""
     target = str(entry.get('Joint name', ''))
@@ -812,6 +827,11 @@ def import_qrig_character(qrig_path, hikmap_path, joint_names, export_node):
         joint = _match_imported_joint(entry, joint_names)
         if joint:
             mapping[hik_name] = joint
+    qrig_joints = {}
+    for attr_name, entry in _qrt_qrig_entries(document).items():
+        joint = _match_imported_joint(entry, joint_names)
+        if joint:
+            qrig_joints[attr_name] = joint
     mapping = _apply_spline_ik(mapping, metadata, joint_names)
     if not mapping:
         cmds.error("Cascadeur QRT data did not match any imported joints.")
@@ -861,12 +881,23 @@ def import_qrig_character(qrig_path, hikmap_path, joint_names, export_node):
         qrig_data = QRigData.add_data(export_node)
     if not qrig_data.characterNode.inputs():
         Node(character).message.connect(qrig_data.characterNode, force=True)
-    spine_names = ['Spine'] + ['Spine{}'.format(index) for index in range(1, 10)]
-    spine_joints = [mapping[name] for name in spine_names if name in mapping]
-    if spine_joints:
-        chest_joint = Node(spine_joints[-1])
-        if qrig_data.chestJoint.inputs() != [chest_joint]:
-            chest_joint.message.connect(qrig_data.chestJoint, force=True)
+
+    # The semantic QRT chest can intentionally differ from the final HIK
+    # spine slot (Manny uses spine4 even though its SplineIK chain continues).
+    # Retain the old endpoint fallback for QRT documents without a chest entry.
+    if 'chestJoint' not in qrig_joints:
+        spine_names = ['Spine'] + [
+            'Spine{}'.format(index) for index in range(1, 10)
+        ]
+        spine_joints = [mapping[name] for name in spine_names if name in mapping]
+        if spine_joints:
+            qrig_joints['chestJoint'] = spine_joints[-1]
+
+    for attr_name, joint in qrig_joints.items():
+        joint_node = Node(joint)
+        target = qrig_data.attr(attr_name)
+        if target.inputs() != [joint_node]:
+            joint_node.message.connect(target, force=True)
     return Node(character)
 
 

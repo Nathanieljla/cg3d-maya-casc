@@ -89,7 +89,12 @@ def import_fbx():
             #switch any hik character to None, so we can see the animation
             character_node = None
             if matching_id_node:
-                character_node = common.get_character_node(matching_id_node)
+                # Preserve the PyMel-era contract: get_character_node accepts
+                # a data plug (whose node is the owning export set), while
+                # get_nodes_with_data returns the export-set Node itself.
+                character_node = common.get_character_node(
+                    matching_id_node.cscDataId
+                )
             if character_node:
                 hik.set_character_source(character_node, hik.SourceType.NONE)
             
@@ -116,7 +121,7 @@ def import_fbx():
                 data.cscDataId.lock()
                 target_export_node = new_node
             else:
-                target_export_node = matching_id_node.node()
+                target_export_node = matching_id_node
                 
                 
         if qrig_path:

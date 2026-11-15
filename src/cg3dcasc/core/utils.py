@@ -493,7 +493,7 @@ def constrain_proxy():
     if len(joint_roots) > 1:
         cmds.warning("Multiple proxy rigs found; using the first one.")
     maintain_offset = preferences.get().derig_maintain_offset
-    descendants = mayautil.descendants([joint_roots[0].node()])
+    descendants = mayautil.descendants([joint_roots[0]])
     proxy_data = cg3dguru.udata.Utils.get_nodes_with_data(
         descendants, data_class=ProxyData
     )
@@ -502,7 +502,7 @@ def constrain_proxy():
         if sources:
             cmds.parentConstraint(
                 sources[0].name(),
-                proxy.node().name(),
+                proxy.name(),
                 maintainOffset=maintain_offset,
             )
 
@@ -585,7 +585,7 @@ def hik_def_from_proxy():
         sources = proxy.proxySource.inputs()
         if not sources:
             continue
-        attribute = connected_hik_attribute(proxy.node(), active_character)
+        attribute = connected_hik_attribute(proxy, active_character)
         if attribute in node_indices:
             source_indices[sources[0].name()] = node_indices[attribute]
     if not source_indices:
