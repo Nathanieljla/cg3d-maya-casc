@@ -291,6 +291,26 @@ class MayaCleanProcessSmokeTests(unittest.TestCase):
         qrig_data = QRigData.get_data(export_set)
         self.assertIsNotNone(qrig_data)
         self.assertTrue(qrig_data.leftArmTwist.exists())
+        self.assertEqual(
+            14,
+            len(
+                cmds.attributeQuery(
+                    "QRigData", node=export_set.name(), listChildren=True
+                )
+            ),
+        )
+        record_indices = cmds.getAttr(
+            export_set.name() + ".DataRecords", multiIndices=True
+        ) or []
+        records = [
+            cmds.getAttr(
+                "{}.DataRecords[{}]".format(export_set.name(), index)
+            )
+            for index in record_indices
+        ]
+        self.assertFalse(
+            any(record.startswith("QRigTwistData:") for record in records)
+        )
         for slot, joint in zip(("Spine", "Spine1", "Spine2"), joint_paths[1:4]):
             inputs = cmds.listConnections(
                 character.name() + "." + slot,
