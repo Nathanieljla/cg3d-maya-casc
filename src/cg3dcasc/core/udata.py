@@ -105,11 +105,11 @@ class CascExportData(cg3dguru.udata.BaseData):
             cg3dguru.udata.create_attr('cscDataId', 'string'),
             cg3dguru.udata.create_attr('dynamicSet', 'bool'),
             cg3dguru.udata.create_attr(
-                'embedTextures', 'enum',
+                'texture_export', 'enum',
                 enumName='Embed={0}:Reference={1}'.format(
                     cls.EMBED_TEXTURES, cls.REFERENCE_TEXTURES
                 ),
-                defaultValue=cls.EMBED_TEXTURES,
+                defaultValue=cls.REFERENCE_TEXTURES,
             ),
             cg3dguru.udata.create_attr('textureLocation', 'string'),
             cg3dguru.udata.create_attr('export_version', 'enum',
@@ -157,7 +157,7 @@ class CascExportData(cg3dguru.udata.BaseData):
     @classmethod
     def get_texture_mode(cls, data):
         """Return the Embed/Reference enum value for this export set."""
-        return data.node().attr('embedTextures').get(asString=False)
+        return data.node().attr('texture_export').get(asString=False)
 
 
     @classmethod

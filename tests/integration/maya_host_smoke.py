@@ -81,18 +81,22 @@ class MayaCleanProcessSmokeTests(unittest.TestCase):
         self.assertTrue(left_handle.name().endswith("|renamedBody"))
         self.assertTrue(right_handle.name().endswith("|body"))
 
-    def test_export_data_defaults_to_embed_and_latest(self):
+    def test_export_data_defaults_to_reference_and_latest(self):
         export_set, data = CascExportData.create_node(nodeType="objectSet")
 
         self.assertTrue(cmds.objExists(export_set.name()))
-        self.assertEqual(CascExportData.EMBED_TEXTURES, CascExportData.get_texture_mode(data))
-        self.assertTrue(CascExportData.get_embed_textures(data))
-        self.assertFalse(CascExportData.references_textures(data))
+        self.assertEqual(
+            CascExportData.REFERENCE_TEXTURES,
+            CascExportData.get_texture_mode(data),
+        )
+        self.assertFalse(CascExportData.get_embed_textures(data))
+        self.assertTrue(CascExportData.references_textures(data))
         self.assertEqual(CascExportData.LATEST, data.export_version.get())
         self.assertTrue(data.dynamicSet.get())
 
-        data.embedTextures.set(CascExportData.REFERENCE_TEXTURES)
-        self.assertTrue(CascExportData.references_textures(data))
+        data.texture_export.set(CascExportData.EMBED_TEXTURES)
+        self.assertTrue(CascExportData.get_embed_textures(data))
+        self.assertFalse(CascExportData.references_textures(data))
 
     def test_export_set_fbx_round_trip_excludes_unrelated_sibling(self):
         root = cmds.createNode("transform", name="characterRoot")
@@ -140,7 +144,7 @@ class MayaCleanProcessSmokeTests(unittest.TestCase):
 
             export_set, data = CascExportData.create_node(nodeType="objectSet")
             cmds.sets(mesh, addElement=export_set.name())
-            data.embedTextures.set(CascExportData.REFERENCE_TEXTURES)
+            data.texture_export.set(CascExportData.REFERENCE_TEXTURES)
             payload = materials.build_export_data(data, [mayautil.Node(mesh)])
 
         properties = payload["meshes"][0]["materials"][0]["properties"]

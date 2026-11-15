@@ -17,6 +17,11 @@ import cg3dcasc.core.utils as utils
 from cg3dcasc.core import maya as mayautil
 
 WINDOW_NAME = 'HIK Export'
+USER_ROLE = 0x0100
+
+
+def _node_sort_key(node):
+    return (node.short_name().casefold(), node.name().casefold())
 
 #for QT Designer "PromotTo" you want to put cg3dmaya/cascadeur/editor.py for the header
 #and use QUiLoader.registerCustomWidget(DropLinEdit)
@@ -71,7 +76,6 @@ class HikExportEditor(cg3dguru.ui.Window):
         self.export_data_instance = cg3dcasc.CascExportData()
         self.scene_nodes = {}        
         self.spine_joints = {}
-        self.extras = {}
         
         self.data_Changing = False #maya scene changed
         self.selection_changing = False #selection set selection change is occuring
@@ -299,10 +303,11 @@ class HikExportEditor(cg3dguru.ui.Window):
         
         object_set = self.export_data.node()
         selected_items = self.ui.export_list.selectedItems()
-        nodes_to_remove = []
-        for item in selected_items:
-            node = self.extras[item.text()]
-            nodes_to_remove.append(node)
+        nodes_to_remove = [
+            item.data(USER_ROLE)
+            for item in selected_items
+            if item.data(USER_ROLE) is not None
+        ]
             
         if nodes_to_remove:
             mayautil.remove_set_members(object_set, nodes_to_remove)
@@ -413,16 +418,25 @@ class HikExportEditor(cg3dguru.ui.Window):
             self.scene_nodes[node.name()] = node
             
         #Build our dropdown list when the names sorted
-        node_names = list(self.scene_nodes)
-        node_names.sort()
+        scene_nodes = sorted(self.scene_nodes.values(), key=_node_sort_key)
         
         self.active_selection = None
-        if node_names:
-            for name in node_names:
-                self.ui.scene_list.addItem(name, self.scene_nodes[name])
+        if scene_nodes:
+            for node in scene_nodes:
+                self.ui.scene_list.addItem(node.short_name(), node)
+                self.ui.scene_list.setItemData(
+                    self.ui.scene_list.count() - 1, node.name(), 3
+                )
             
             if self.node_to_select:
-                idx = self.ui.scene_list.findText(self.node_to_select.name())
+                idx = next(
+                    (
+                        index
+                        for index in range(self.ui.scene_list.count())
+                        if self.ui.scene_list.itemData(index) == self.node_to_select
+                    ),
+                    -1,
+                )
                 self.node_to_select = None
                 if idx > -1:
                     self.ui.scene_list.setCurrentIndex(idx)
@@ -452,10 +466,11 @@ class HikExportEditor(cg3dguru.ui.Window):
         for spine_name, joint in spine_joints:
             self.spine_joints[joint.name()] = joint
         
-        spine_names = list(self.spine_joints)
-        spine_names.sort()
-        for name in spine_names:
-            self.ui.spine_list.addItem(name, self.spine_joints[name])
+        for joint in sorted(self.spine_joints.values(), key=_node_sort_key):
+            self.ui.spine_list.addItem(joint.short_name(), joint)
+            self.ui.spine_list.setItemData(
+                self.ui.spine_list.count() - 1, joint.name(), 3
+            )
         
         #Make an empty entry if the rig_data doesn't reference a valid spine
         #otherwise set the dropdown the matching spine
@@ -468,26 +483,29 @@ class HikExportEditor(cg3dguru.ui.Window):
             self.ui.spine_list.addItem('', None)
             self.ui.spine_list.setCurrentText('')
         else:
-            self.ui.spine_list.setCurrentText(valid_spine.name())
+            for index in range(self.ui.spine_list.count()):
+                if self.ui.spine_list.itemData(index) == valid_spine:
+                    self.ui.spine_list.setCurrentIndex(index)
+                    break
 
         
     def _init_selection_set(self):
         self.ui.export_list.clear()
-        self.extras.clear()
         
         if not self.active_selection:
             return
         
         object_set = self.export_data.node()
-        names = []
-        
+        nodes = []
         for node in mayautil.set_members(object_set):
             if cg3dcasc.node_type_exportable(node) or mayautil.node_type(node) == 'file':
-                self.extras[node.name()] = node
-                names.append(node.name())
+                nodes.append(node)
 
-        names.sort()
-        self.ui.export_list.addItems(names)
+        for node in sorted(nodes, key=_node_sort_key):
+            item = QListWidgetItem(node.short_name())
+            item.setData(USER_ROLE, node)
+            item.setToolTip(node.name())
+            self.ui.export_list.addItem(item)
         self.ui.dynamic_set.setChecked(self.export_data.dynamicSet.get())
         
 
@@ -496,10 +514,13 @@ class HikExportEditor(cg3dguru.ui.Window):
             attr = self.rig_data.attr(attr_name)
             inputs = attr.inputs()
             if inputs:
-                ui_element.setText(inputs[0].name())
+                ui_element.setText(inputs[0].short_name())
+                ui_element.setToolTip(inputs[0].name())
 
         self.ui.left_weapon_node.setText('')
         self.ui.right_weapon_node.setText('')
+        self.ui.left_weapon_node.setToolTip('')
+        self.ui.right_weapon_node.setToolTip('')
                      
         if not self.rig_data:
             return
