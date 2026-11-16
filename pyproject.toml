@@ -18,7 +18,7 @@ classifiers = [
 ]
 
 dependencies = [
-    "cg3d-maya-core==0.8.0",
+    "cg3d-maya-core==1.0.0",
     "wing-carrier==1.2.0"
 ]
 
