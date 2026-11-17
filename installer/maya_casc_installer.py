@@ -52,6 +52,26 @@ import zipfile
 from functools import partial
 import site
 
+
+def _cascadeur_install_preflight(local_app_data=None):
+    """Return Cascadeur's paths and a user-facing prerequisite error."""
+    local_path = pathlib.Path(
+        local_app_data or os.path.expandvars("%LOCALAPPDATA%")
+    )
+    nekki_dir = local_path.joinpath("Nekki Limited", "Cascadeur")
+    settings_file = nekki_dir.joinpath('settings.json')
+
+    if nekki_dir.is_dir() and settings_file.is_file():
+        return True, nekki_dir, settings_file, ''
+
+    failure_reason = (
+        "Cascadeur is not ready for the bridge installer.\n"
+        "Install and launch Cascadeur once, close it, then run this "
+        "installer again.\nExpected: {0}".format(settings_file)
+    )
+    return False, nekki_dir, settings_file, failure_reason
+
+
 try:
     #python3
     from urllib.request import urlopen
@@ -335,6 +355,7 @@ class ModuleManager(QThread):
         self.uninstall_action = False
         
         self.action_succeeded = False
+        self.failure_reason = ''
         
         self._module_definitions = []
         self.module_name = module_name
@@ -683,6 +704,7 @@ class ModuleManager(QThread):
             self.action_succeeded = self.main_action()
         except Exception as e:
             self.action_succeeded = False
+            self.failure_reason = str(e)
             if self.upgrade_action:
                 print('Upgrade Failed!!\n{0}'.format(e))
             else:
@@ -699,7 +721,7 @@ class ModuleManager(QThread):
         
         """
         maya_version = str(self.maya_version)
-        relative_path = '.\{0}'.format(self.relative_module_path)        
+        relative_path = '.\\{0}'.format(self.relative_module_path)
         platform_name =  self.get_platform_string(Commandline.get_platform())
         
         if not self._version_specific:
@@ -760,6 +782,7 @@ class ModuleManager(QThread):
     
     def pre_action(self, upgrade, uninstall):
         #Cache this result
+        self.failure_reason = ''
         self.upgrade_action = upgrade
         self.uninstall_action = uninstall
         
@@ -823,7 +846,8 @@ class ModuleManager(QThread):
                 self.make_folder(self.site_packages_path)
         except OSError:
             return False
-        
+
+        return True
         
     def main_action(self):
         #Cache this result
@@ -1266,6 +1290,9 @@ class InstallerUi(QWidget):
             return message.replace('Install', 'Uninstall')
         else:
             return message
+
+    def _failure_message(self):
+        return self.module_manager.failure_reason or self._message(self.failed_message)
         
             
                 
@@ -1285,7 +1312,7 @@ class InstallerUi(QWidget):
             self.close_button.show()
             self.animated_gif.hide()
             
-            self.message_label.setText(self._message(self.failed_message))
+            self.message_label.setText(self._failure_message())
         
     
     def done(self):
@@ -1294,7 +1321,7 @@ class InstallerUi(QWidget):
         if self.module_manager.action_succeeded:
             self.message_label.setText(self._message(self.success_message))
         else:
-            self.message_label.setText(self._message(self.failed_message))
+            self.message_label.setText(self._failure_message())
          
         no_errors = self.module_manager.post_action()
         if not no_errors:
@@ -1335,15 +1362,33 @@ class MyInstaller(ModuleManager):
                 child.unlink() #missing_ok=True) #missing_ok doens't work for maya 2022
                 
     def pre_install(self):
+        ready, self.nekki_dir, settings_file, reason = (
+            _cascadeur_install_preflight()
+        )
+
+        # Cascadeur creates its user-data folder and settings file on first launch.
+        # Check this before clearing an existing Maya module so a missing external
+        # prerequisite cannot damage a working installation.
+        if not ready:
+            self.failure_reason = reason
+            print(self.failure_reason)
+            return False
+
+        local_path = self.nekki_dir.parents[1]
+
         try:
-            
             if os.path.exists(self.module_path):
                 shutil.rmtree(self.module_path, ignore_errors=True)
 
         except Exception as e:
             print(f"Failed to clear module path:{e}")
-            
-        super().pre_install()
+
+        if not super().pre_install():
+            self.failure_reason = (
+                "The Maya module folders could not be prepared. "
+                "See the Script Editor for details."
+            )
+            return False
 
         ##let's frist install platformdirs so we can make a spot for our
         ##cascaduer code. Once we determined the path, we'll clear the scripts
@@ -1365,13 +1410,6 @@ class MyInstaller(ModuleManager):
             #print("CASCADEUR:Failed to install platformsdir package. Installation can't continue.")
             #return False
 
-        local_path = pathlib.Path(os.path.expandvars("%LOCALAPPDATA%"))
-            
-        self.nekki_dir = local_path.joinpath("Nekki Limited", "Cascadeur")
-        if not self.nekki_dir.exists():
-            #self.clean_folder(pathlib.Path(self.scripts_path))
-            return False
-        
         self.my_data_dir = local_path.joinpath('CG_3D_Guru', 'Cascadeur')
         if not self.my_data_dir.exists():
             shutil.rmtree(self.my_data_dir, ignore_errors=True)
@@ -1599,7 +1637,7 @@ class MyInstaller(ModuleManager):
 def main():
     if MAYA_RUNNING:
         MODULE_NAME = 'cascadeur'
-        MODULE_VERSION = 1.5
+        MODULE_VERSION = 2.0
         PACKAGE_NAME = "cg3d-maya-casc"
         
         manager = MyInstaller(MODULE_NAME, MODULE_VERSION, package_name = PACKAGE_NAME)

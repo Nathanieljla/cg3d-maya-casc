@@ -36,6 +36,19 @@ This will automatically install all the dependencies without requiring admin pri
  (you can say 'yes' to the question)
 
  # Revisions
+  ### 2.0.0
+ New: Support for textures (embedded or referenced)
+ 
+ New: Send a character and rig from Cascadeur to Maya and have an HIK skeleton definition automatically be defined
+ 
+ Improvement: No longer required pymel.
+ 
+ Improvement: Rig Mode now properly appears when sending an HIK character to Cascadeur.
+ 
+ Improvement: The bridge no longer attempts to enter and exit rig mode to auto generate the rig. This allows users to review the QRT values and results before exiting rig mode.
+ 
+
+ 
  ### 1.6.3
  'Dynamic' now trims off branches of a hierarchy that don't lead to any exportable content.
  
