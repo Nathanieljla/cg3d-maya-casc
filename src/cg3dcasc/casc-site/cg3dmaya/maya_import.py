@@ -23,14 +23,112 @@ from . import fbx
 
 
 
+def _store_qrt_template(domain_scene, qrt_json):
+    """Save a quick-rig template on the rig-mode AnimationInfo object.
+
+    The Python quick rigging tool reads this (QrtInfo.qrt_json) when it opens,
+    in place of picking a template from the app's autorig_templates folder.
+    This mirrors prototypes.rigs.qrt._qrt.Qrt.add_qrt_json.
+    """
+    def mod(scene):
+        anim_infos = scene.bv.get_behaviours('AnimationInfo')
+        if len(anim_infos) != 1:
+            raise Exception('Expected one AnimationInfo, found {}'.format(len(anim_infos)))
+
+        obj_id = scene.bv.get_behaviour_owner(anim_infos[0])
+        qrt_info_id = scene.bv.behaviour_id(obj_id, 'QrtInfo')
+        if not qrt_info_id:
+            qrt_info_id = scene.be.add_behaviour(obj_id, 'QrtInfo')
+        scene.be.set_behaviour_string(qrt_info_id, 'qrt_json', qrt_json)
+
+    return pycsc.wrap(domain_scene).edit('Add Maya QRT template', mod)
+
+
+def _get_qrt_model():
+    """The open Python quick rigging tool model, or None."""
+    try:
+        import shiboken6
+        import models.quick_rig_tool.model as qrt_model
+    except ImportError:
+        return None
+
+    model_ref = getattr(qrt_model.AutoRiggingTool, 'active_instance', None)
+    model = model_ref() if model_ref else None
+    if model is None or not shiboken6.isValid(model):
+        return None
+    return model
+
+
+def _call_later(func, *args):
+    """Run func on a later tick of Cascadeur's GUI event loop.
+
+    Maya sends commands through `cascadeur.exe --run-python-code`, and the
+    running app executes that code inside its request handler. Rig mode turned
+    on there never switches the UI to the rigging workspace (the rig itself is
+    fine); turned on one tick later, it does.
+    """
+    def run():
+        try:
+            func(*args)
+        except Exception:
+            import traceback
+            traceback.print_exc()
+
+    try:
+        from PySide6 import QtCore
+    except ImportError:
+        QtCore = None
+    if QtCore is not None and QtCore.QCoreApplication.instance() is not None:
+        QtCore.QTimer.singleShot(0, run)
+        return
+
+    try:
+        from events import scene_idle_manager
+    except ImportError:
+        # No way to defer in this build: run now (the rig still builds, but
+        # the rigging workspace may not appear until the tab is switched).
+        run()
+        return
+
+    subscription = None
+
+    def run_once(*_):
+        scene_idle_manager.unsubscribe(subscription)
+        run()
+
+    subscription = scene_idle_manager.subscribe(run_once)
+
+
 def _import_maya_qrig_file(file_path):
     scene_manager = csc.app.get_application().get_scene_manager()
     application_scene = scene_manager.current_scene()
-    rm_on.run_raw(application_scene.domain_scene(), [0.0, 0.5, 0.0])
+    domain_scene = application_scene.domain_scene()
+    rm_on.run_raw(domain_scene, [0.0, 0.5, 0.0])
     rig_tool = csc.app.get_application().get_tools_manager().get_tool('RiggingToolWindowTool').editor(application_scene)
+
+    if hasattr(rig_tool, 'load_template_by_fileName'):
+        # Cascadeur builds with the C++ quick rigging tool.
+        rig_tool.open_quick_rigging_tool()
+        rig_tool.load_template_by_fileName(file_path)
+        #rig_tool.generate_rig_elements()
+        return
+
+    # Builds with the Python quick rigging tool (2027 removed the C++
+    # template/generate bindings). Store the template where the tool reads it
+    # on open, open it, then press "Add Rig Elements" for the user.
+    with open(file_path, 'r', encoding='utf-8') as qrig_file:
+        qrt_json = qrig_file.read()
+
+    if not _store_qrt_template(domain_scene, qrt_json):
+        domain_scene.error("Couldn't store the Maya quick rig template. See the log.")
+        return
+
     rig_tool.open_quick_rigging_tool()
-    rig_tool.load_template_by_fileName(file_path)
-    rig_tool.generate_rig_elements()
+    qrt_model = _get_qrt_model()
+    if qrt_model is None:
+        domain_scene.error("The quick rigging tool didn't open; can't generate the rig.")
+        return
+    #qrt_model.createPrototype()
     
     
 def _get_object_by_id(object_list, maya_id):
@@ -107,53 +205,174 @@ def _get_modified_filter(existing_data, qrig_path, import_filter: fbx.FbxFilterT
 
 
 
-def _load_textures(scene):
-    def mod(scene):
-        temp_dir = pathlib.Path(os.path.join(tempfile.gettempdir(), 'mayacasc'))
-        #load any textures
-        texture_path: pathlib.Path = temp_dir.joinpath('texture_info.json')
-        if texture_path.exists():
-            texture_data = open(texture_path)
-            texture_mapping = json.load(texture_data)
-            texture_data.close()
+MATERIAL_INFO_FILE = 'material_info.json'
+MATERIAL_INFO_VERSION = 1
 
-            names = list(texture_mapping.keys())
-            if not names:
-                return
+_MATERIAL_MAP_RESETS = {
+    'normal_map': '',
+    'base_color_map': '',
+    'emissive_color_map': '',
+    'roughness_map': '',
+    'metallic_map': '',
+    'reflectance_map': '',
+    'ambient_occlusion_map': '',
+    'roughness_channel': 0,
+    'metallic_channel': 0,
+    'reflectance_channel': 0,
+    'ambient_occlusion_channel': 0,
+}
 
-            objs = scene.get_scene_objects(names=names)
-            for obj in objs:
-                if not obj.has_behaviour('MeshObject'):
-                    print("Can't find MeshObject for {}".format(obj.name))
+
+def _path_segments(path):
+    return [
+        part
+        for part in str(path).replace('\\', '/').replace('|', '/').split('/')
+        if part
+    ]
+
+
+def _without_namespace(name):
+    return str(name).rsplit(':', 1)[-1]
+
+
+def _material_name(material):
+    prop = material.get_property('name')
+    return prop.get() if prop and prop.id is not None else ''
+
+
+def _mesh_materials(obj):
+    mesh = obj.get_behaviour_by_name('MeshObject')
+    if not mesh:
+        return []
+    return list(mesh.get_property('materials').get())
+
+
+def _mesh_score(obj, mesh_data):
+    maya_name = mesh_data.get('name', '')
+    exact_name = obj.name == maya_name
+    short_name = _without_namespace(obj.name) == _without_namespace(maya_name)
+    if not exact_name and not short_name:
+        return -1
+
+    maya_parts = _path_segments(mesh_data.get('path', maya_name))
+    casc_parts = _path_segments(obj.get_path_name().to_string())
+    suffix_matches = 0
+    for maya_part, casc_part in zip(reversed(maya_parts), reversed(casc_parts)):
+        if maya_part == casc_part:
+            suffix_matches += 1
+        elif _without_namespace(maya_part) == _without_namespace(casc_part):
+            suffix_matches += 1
+        else:
+            break
+
+    wanted_materials = {
+        item.get('name', '') for item in mesh_data.get('materials', [])
+    }
+    found_materials = {_material_name(item) for item in _mesh_materials(obj)}
+    material_matches = len(wanted_materials.intersection(found_materials))
+    return (100 if exact_name else 50) + suffix_matches * 10 + material_matches * 20
+
+
+def _match_mesh(meshes, mesh_data, used):
+    candidates = [item for item in meshes if item not in used]
+    scored = sorted(
+        ((_mesh_score(item, mesh_data), item) for item in candidates),
+        key=lambda item: item[0],
+        reverse=True,
+    )
+    if not scored or scored[0][0] < 0:
+        return None
+    return scored[0][1]
+
+
+def _set_material_values(scene, material, values):
+    # Treat the sidecar as a complete snapshot of the material's texture
+    # mappings. Clearing first ensures a disconnected or reassigned Maya map
+    # cannot leave its previous Cascadeur path/channel behind.
+    updates = dict(_MATERIAL_MAP_RESETS)
+    updates.update(values)
+    for field, value in updates.items():
+        prop = material.get_property(field)
+        if not prop or prop.id is None:
+            print("Cascadeur Material has no '{}' property".format(field))
+            continue
+        scene.de.set_data_value(prop.id, value)
+
+
+def _apply_mesh_materials(scene, obj, mesh_data):
+    materials = _mesh_materials(obj)
+    by_name = {}
+    for material in materials:
+        by_name.setdefault(_material_name(material), []).append(material)
+
+    applied = 0
+    for material_data in mesh_data.get('materials', []):
+        name = material_data.get('name', '')
+        matches = by_name.get(name, [])
+        if not matches:
+            matches = [
+                material
+                for material in materials
+                if _without_namespace(_material_name(material))
+                == _without_namespace(name)
+            ]
+        slot = material_data.get('slot', -1)
+        material = matches[0] if matches else None
+        if material is None and 0 <= slot < len(materials):
+            # FBX owns the polygon-to-slot assignment. Slot order is the safest
+            # fallback when a DCC has renamed a material during import.
+            material = materials[slot]
+        if material is None:
+            print("Can't find material '{}' on '{}'".format(name, obj.name))
+            continue
+        _set_material_values(scene, material, material_data.get('properties', {}))
+        applied += 1
+    return applied
+
+
+def _load_materials(scene):
+    temp_dir = pathlib.Path(os.path.join(tempfile.gettempdir(), 'mayacasc'))
+    material_path = temp_dir.joinpath(MATERIAL_INFO_FILE)
+    if not material_path.exists():
+        # Embed mode deliberately has no sidecar and performs no texture work.
+        return
+
+    with material_path.open(encoding='utf-8') as material_file:
+        document = json.load(material_file)
+    if document.get('version') != MATERIAL_INFO_VERSION:
+        scene.warning('Unsupported Maya material data version')
+        return
+
+    def mod(edit_scene):
+        all_sets, unused_selected = common.get_export_sets(edit_scene)
+        sets_by_id = common.get_ids(all_sets)
+        applied = 0
+        for export_data in document.get('exports', []):
+            export_set = sets_by_id.get(export_data.get('id'))
+            if export_set is None:
+                print(
+                    "Can't find imported Maya set '{}'".format(
+                        export_data.get('set_name', export_data.get('id'))
+                    )
+                )
+                continue
+
+            branch = set()
+            for root in common.get_set_members(export_set):
+                branch.update(hierarchy.get_object_branch_inclusive(root, root.scene))
+            meshes = [item for item in branch if item.has_behaviour('MeshObject')]
+            used = set()
+            for mesh_data in export_data.get('meshes', []):
+                obj = _match_mesh(meshes, mesh_data, used)
+                if obj is None:
+                    print("Can't find Maya mesh '{}'".format(mesh_data.get('path')))
                     continue
+                used.add(obj)
+                applied += _apply_mesh_materials(edit_scene, obj, mesh_data)
+        edit_scene.su.generate_update()
+        print('Applied {} Maya material instance(s)'.format(applied))
 
-                if not obj.has_behaviour('TextureContainer'):
-                    obj.add_behaviour('TextureContainer')
-                    obj.TextureContainer.start_frame.create_data('Start frame', csc.model.DataMode.Static, 0, group_name='maya_textures')
-
-                filenames = texture_mapping[obj.name]
-                container = obj.TextureContainer
-                textures = container.texture_paths.get()
-                for texture in textures:
-                    container.texture_paths.remove(texture)
-                    
-                    if hasattr(texture, 'id'):
-                        container.de.delete_data(texture.id)
-                    else:
-                        try:
-                            container.de.delete_data(texture)
-                        except:
-                            print("Couldn't delete {texture} when updating textures")
-
-                #scene.su.generate_update()
-                for idx, filename in enumerate(filenames):
-                    data_name = f"texture {idx}"
-                    container.texture_paths.create_data(data_name, csc.model.DataMode.Static, filename, group_name='maya_textures')
-
-
-                obj.MeshObject.textures.set(obj.TextureContainer)
-              
-    scene.edit("Load Textures", mod)
+    scene.edit('Load Maya Materials', mod)
 
 
 def _import_maya(new_scene, import_filter: fbx.FbxFilterType):
@@ -244,7 +463,7 @@ def _import_maya(new_scene, import_filter: fbx.FbxFilterType):
             scene.info("Updated existing data")
 
 
-    _load_textures(scene)
+    _load_materials(scene)
 
 
     #rig generation has to come last, so all the other automation can complete properly
@@ -254,7 +473,7 @@ def _import_maya(new_scene, import_filter: fbx.FbxFilterType):
     #this can stay inside the file loop and we can move the texture loading to the end.
     if import_rig:
         print("attempting rig import")
-        _import_maya_qrig_file(import_rig)
+        _call_later(_import_maya_qrig_file, import_rig)
 
 
 def update_models():
@@ -278,5 +497,6 @@ def smart_import():
     
     
 def update_textures():
+    """Read the latest Maya material sidecar and replace current mappings."""
     scene = pycsc.get_current_scene().ds
-    _load_textures(scene)
+    return _load_materials(scene)

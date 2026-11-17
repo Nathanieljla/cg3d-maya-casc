@@ -3,9 +3,10 @@ import json
 import tempfile
 import os
 import pathlib
+import shutil
 import time
 
-import pymel.core as pm
+from maya import cmds
 from . import hik
 
 import wingcarrier.pigeons
@@ -22,11 +23,12 @@ from . import common
 from . import casc_qrt
 from . import fbx
 from . import materials
+from . import maya as mayautil
 
 
 def get_root_parent(input_transform):
     """Returns the highest level transform node for the given input transform"""
-    parent = input_transform.getParent()
+    parent = mayautil.parent(input_transform)
     if parent:
         return get_root_parent(parent)
     else:
@@ -72,7 +74,7 @@ def get_export_branches(root_transforms, *content_sets):
     #ancestors: walk up from each item to its root. Branches that don't lead
     #to content never get walked, which is what trims them.
     for node in content:
-        current = node.getParent()
+        current = mayautil.parent(node)
         while current is not None and current not in branch:
             branch.add(current)
 
@@ -82,7 +84,7 @@ def get_export_branches(root_transforms, *content_sets):
             if current in root_transforms:
                 break
 
-            current = current.getParent()
+            current = mayautil.parent(current)
 
     #descendants: anything under our content comes along for the ride, so a
     #skeleton stays whole below the joints that are actually skinned. Mesh
@@ -90,12 +92,12 @@ def get_export_branches(root_transforms, *content_sets):
     #walk with its transform instead.
     seeds = set()
     for node in content:
-        if isinstance(node, pm.nodetypes.Shape):
-            seeds.add( node.getParent() )
+        if cmds.objectType(str(node), isAType="shape"):
+            seeds.add(mayautil.parent(node))
         else:
             seeds.add(node)
 
-    branch.update( pm.listRelatives(list(seeds), allDescendents=True) or [] )
+    branch.update(mayautil.descendants(seeds))
 
     return branch
 
@@ -106,13 +108,12 @@ def node_type_exportable(node):
     """See if the node set to export is a valid node type"""
     #This is used by the editor, so don't remove this function
     #just because it's not being used in the core.py
-    if isinstance(node, pm.nodetypes.Joint) \
-       or isinstance(node, pm.nodetypes.Mesh) \
-     or isinstance(node, pm.nodetypes.SkinCluster) \
-     or isinstance(node, pm.nodetypes.Transform):
-        return True
-    
-    return False
+    return mayautil.node_type(node) in {
+        "joint",
+        "mesh",
+        "skinCluster",
+        "transform",
+    }
 
 
 def get_exportable_content(export_data):
@@ -129,7 +130,7 @@ def get_exportable_content(export_data):
 
     
     joints, meshes, skin_clusters, transforms =\
-        common.get_skinned_data_sets(export_data.node().flattened())    
+        common.get_skinned_data_sets(mayautil.set_members(export_data.node()))
     
     if not export_data.dynamicSet.get():
         return (joints, meshes, skin_clusters, transforms)
@@ -176,7 +177,8 @@ def _export_data(export_data, export_folder: pathlib.Path, export_rig: bool, exp
         export_content = root_transforms
 
     if export_fbx:
-        pm.mel.eval('if (!`pluginInfo -q -l "fbxmaya"`){ loadPlugin "fbxmaya"; }')
+        if not cmds.pluginInfo("fbxmaya", query=True, loaded=True):
+            cmds.loadPlugin("fbxmaya")
         #Hik should be exported from the stand position only when
         #exporting a rig
         current_source = None
@@ -184,16 +186,16 @@ def _export_data(export_data, export_folder: pathlib.Path, export_rig: bool, exp
             current_source = hik.get_character_source(character_node)
             hik.set_character_source(character_node, hik.SourceType.STANCE)
 
-        user_selection = pm.ls(sl=True)
+        user_selection = mayautil.ls(selection=True, long=True)
         if dynamic:
             #for legacy data export_content is the root transforms, which is
             #exactly what this used to select.
-            pm.select(list(export_content), replace=True)
+            cmds.select(mayautil.names(export_content), replace=True)
         else:
-            pm.select(list(transforms), replace=True)
-            pm.select(list(skin_clusters), add=True)
-            pm.select(list(meshes), add=True)
-            pm.select(list(joints), add=True)
+            cmds.select(mayautil.names(transforms), replace=True)
+            cmds.select(mayautil.names(skin_clusters), add=True)
+            cmds.select(mayautil.names(meshes), add=True)
+            cmds.select(mayautil.names(joints), add=True)
 
         filename = '{}.{}.fbx'.format(node_name, file_id)
         fbx_file_path = export_folder.joinpath(filename)
@@ -202,15 +204,22 @@ def _export_data(export_data, export_folder: pathlib.Path, export_rig: bool, exp
         prefs = preferences.get()
         bake = prefs.bake_animations == preferences.OptionEnum.ALWAYS
         if prefs.bake_animations == preferences.OptionEnum.ASK:
-            result = pm.confirmDialog(title='Export Animations', message='Bake Animation?', messageAlign='center', button=['Yes', 'No'], defaultButton='Yes', cancelButton='No', dismissString='No')
+            result = cmds.confirmDialog(title='Export Animations', message='Bake Animation?', messageAlign='center', button=['Yes', 'No'], defaultButton='Yes', cancelButton='No', dismissString='No')
             bake = result == 'Yes'
             
         #0.2.0 selects the whole trimmed branch, so the exporter doesn't need
         #to pull in children of its own.
-        fbx.export(fbx_file_path, bake_animations=bake,
-                   include_children = dynamic and legacy)
+        fbx.export(
+            fbx_file_path,
+            bake_animations=bake,
+            include_children=dynamic and legacy,
+            embed_media=CascExportData.get_embed_textures(export_data),
+        )
 
-        pm.select(user_selection, replace=True)
+        if user_selection:
+            cmds.select(mayautil.names(user_selection), replace=True)
+        else:
+            cmds.select(clear=True)
         
         if export_rig and character_node:
             hik.set_character_source(character_node, current_source)
@@ -230,7 +239,7 @@ def _export_data(export_data, export_folder: pathlib.Path, export_rig: bool, exp
             #NOTE: listRelatives() falls back to the active selection when
             #it's handed nothing, so the emptiness check isn't optional.
             texture_nodes.update(
-                pm.listRelatives(list(root_transforms), allDescendents=True) or []
+                mayautil.descendants(root_transforms)
             )
     else:
         texture_nodes = export_content
@@ -240,15 +249,15 @@ def _export_data(export_data, export_folder: pathlib.Path, export_rig: bool, exp
 
 def _build_default_set():
     exportables = []
-    selection = pm.ls(sl=True)
+    selection = mayautil.ls(selection=True, long=True)
     if selection:
         exportables = selection
     else:
-        assemblies = set(pm.ls(assemblies=True))
-        cameras = set(pm.ls(type='camera'))
+        assemblies = set(mayautil.ls(assemblies=True, long=True))
+        cameras = set(mayautil.ls(type='camera', long=True))
         for c in cameras:
             #camera's are shape data, so we need to get the tranform
-            assemblies.discard(c.getParent())
+            assemblies.discard(mayautil.parent(c))
             
         exportables = list(assemblies)
 
@@ -257,12 +266,15 @@ def _build_default_set():
         
     export_node, data = CascExportData.create_node(nodeType='objectSet')
     if exportables:
-        export_node.addMembers(exportables)
+        mayautil.add_set_members(export_node, exportables)
         
-    pm.rename(export_node, 'CACS_EXPORT')
-    pm.select(selection, replace=True)
+    export_node = mayautil.rename(export_node, 'CACS_EXPORT')
+    if selection:
+        cmds.select(mayautil.names(selection), replace=True)
+    else:
+        cmds.select(clear=True)
     
-    return export_node
+    return CascExportData.get_data(export_node)
 
 
 def cascadeur_available():
@@ -272,55 +284,81 @@ def cascadeur_available():
     return result
 
 
+def _as_export_data(value):
+    """Return the CascExportData block stored on a node or data handle."""
+    if isinstance(value, cg3dguru.udata.Attribute):
+        value = value.node()
+
+    data = CascExportData.get_data(value)
+    if data is None:
+        raise ValueError(
+            "Node {!r} does not contain CascExportData".format(value)
+        )
+    return data
+
+
+def _clear_export_directory(directory):
+    """Remove files and FBX media directories from an export directory."""
+    for child in directory.iterdir():
+        if child.is_symlink() or child.is_file():
+            child.unlink()
+        elif child.is_dir():
+            shutil.rmtree(child)
+        else:
+            child.unlink()
+
+
 def export(export_set=None, export_rig=False, cmd='', textures=True, only_textures=False):
     if cmd and not cascadeur_available():
-        pm.displayError("Please make sure Cascadeur is running and try again.")
-        #pm.confirmDialog(message="Please launch Cascadeur, then try again.",button=['Okay'])
+        cmds.error("Please make sure Cascadeur is running and try again.")
         return False
     
     #remove any previous exports
     temp_dir = pathlib.Path(os.path.join(tempfile.gettempdir(), 'mayacasc'))
     print('Cascaduer Export Location {}'.format(temp_dir))
-    if not temp_dir.exists():
-        temp_dir.mkdir()
+    temp_dir.mkdir(parents=True, exist_ok=True)
 
     #delete previous entries
-    for child in temp_dir.iterdir():
-        child.unlink() #missing_ok=True) #missing_ok=True) #missing_ok doens't work for maya 2022
+    _clear_export_directory(temp_dir)
 
-    if export_set:
-        export_nodes = [export_set]
+    if export_set is not None:
+        export_nodes = [_as_export_data(export_set)]
     else:
-        export_nodes = common.get_export_nodes()
-        if not export_nodes:
+        export_sets = common.get_export_nodes()
+        if export_sets:
+            export_nodes = [_as_export_data(node) for node in export_sets]
+        else:
             default_set = _build_default_set()
             if default_set:
-                export_nodes = [default_set]
+                export_nodes = [_as_export_data(default_set)]
             else:
-                pm.confirmDialog(message="Nothing was found to export. Select some items to export and try again.", button=['Okay'])
+                cmds.confirmDialog(message="Nothing was found to export. Select some items to export and try again.", button=['Okay'])
                 return False                
              
     #export our data
-    texture_nodes = set()
+    material_exports = []
     for node in export_nodes:
         nodes = _export_data(node, temp_dir, export_rig, not only_textures)
-        texture_nodes.update(nodes)
+        if (
+            (textures or only_textures)
+            and nodes
+            and CascExportData.references_textures(node)
+        ):
+            material_exports.append(
+                materials.build_export_data(node, list(nodes))
+            )
 
-    #Let's export our texture info
-    texture_mappings = {}
-    if textures or only_textures:
-        print("Exporting textures")
-        #NOTE: get_textures() runs listRelatives()/ls(), both of which fall
-        #back to the active selection when handed nothing. The user's
-        #selection has been restored by this point, so never call in empty.
-        if texture_nodes:
-            texture_mappings = materials.get_textures(list(texture_nodes), export_nodes)
-
-        print(texture_mappings)
-        texture_file = open(temp_dir.joinpath('texture_info.json'), 'w')
-        formatted_str = json.dumps(texture_mappings, indent=4)
-        texture_file.write(formatted_str)
-        texture_file.close()
+    # Embed mode intentionally emits no material sidecar. In Reference mode,
+    # Cascadeur updates the official Material instances created by FBX import.
+    if material_exports:
+        print("Exporting referenced materials")
+        material_path = temp_dir.joinpath(materials.MATERIAL_INFO_FILE)
+        with material_path.open("w", encoding="utf-8") as material_file:
+            json.dump(
+                materials.material_document(material_exports),
+                material_file,
+                indent=4,
+            )
 
     if cmd:
         server.send_to_casc(cmd)
@@ -337,7 +375,8 @@ def update_models():
     
     
 def update_textures():
-    export(cmd=u"cg3dmaya.update_textures()", only_textures=True)
+    """Rebuild and apply the current Reference material sidecar."""
+    return export(cmd=u"cg3dmaya.update_textures()", only_textures=True)
     
     
 def export_scene(new_scene):

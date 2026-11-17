@@ -1,7 +1,8 @@
-import pymel.core as pm
 import enum
 import pathlib
 import pickle
+
+from maya import cmds
 
 _PREFS_INSTANCE = None
 
@@ -54,11 +55,11 @@ class _PreferenceData(object):
        
         
 def _get_save_path():
-    saved_data = pathlib.Path(__file__)
-    saved_data = saved_data.parent
-    saved_data = saved_data.joinpath('prefs.pickle')
-    
-    return saved_data
+    preferences_dir = pathlib.Path(cmds.internalVar(userPrefDir=True)).joinpath(
+        "cg3dcasc"
+    )
+    preferences_dir.mkdir(parents=True, exist_ok=True)
+    return preferences_dir.joinpath("prefs.pickle")
 
 
 def new():
@@ -73,12 +74,11 @@ def get():
 
     saved_data = _get_save_path()
     if saved_data.exists():
-        try:       
-            file = open(saved_data, 'rb')
-            _PREFS_INSTANCE = _PreferenceData(pickle.load(file))
-            file.close()
-        except:
-            pm.warning("Cascadeur: Preferences are reset due to corrupt data!")
+        try:
+            with open(saved_data, "rb") as prefs_file:
+                _PREFS_INSTANCE = _PreferenceData(pickle.load(prefs_file))
+        except (OSError, pickle.PickleError, EOFError, AttributeError, ValueError):
+            cmds.warning("Cascadeur: Preferences are reset due to corrupt data!")
             set(_PreferenceData())
     else:
         set(_PreferenceData())
@@ -91,8 +91,7 @@ def set(data: _PreferenceData):
     _PREFS_INSTANCE = data
     saved_data = _get_save_path()
     
-    file = open(saved_data, "wb")
-    pickle.dump(data, file)
-    file.close()
+    with open(saved_data, "wb") as prefs_file:
+        pickle.dump(data, prefs_file)
 
     

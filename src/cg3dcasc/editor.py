@@ -1,7 +1,9 @@
 
 import os
 
-import pymel.core as pm
+from maya import cmds, mel
+
+from cg3dguru.maya import Node
 
 try:
     from PySide2.QtWidgets import *
@@ -12,8 +14,14 @@ except:
 import cg3dguru.ui
 import cg3dcasc
 import cg3dcasc.core.utils as utils
+from cg3dcasc.core import maya as mayautil
 
 WINDOW_NAME = 'HIK Export'
+USER_ROLE = 0x0100
+
+
+def _node_sort_key(node):
+    return (node.short_name().casefold(), node.name().casefold())
 
 #for QT Designer "PromotTo" you want to put cg3dmaya/cascadeur/editor.py for the header
 #and use QUiLoader.registerCustomWidget(DropLinEdit)
@@ -33,8 +41,8 @@ class DropLineEdit(QLineEdit):
         #Why am I only limiting this to joints?  why have a method that verifies all the
         #supported types?  Let's keep this as is for now, until I can give this more thought.
         #there must have been a reason!...?
-        node = pm.PyNode(entries[0])
-        if node.type() != 'joint':
+        node = entries[0]
+        if not cmds.objExists(node) or cmds.nodeType(node) != 'joint':
             return
         
         event.acceptProposedAction()
@@ -46,7 +54,8 @@ class DropLineEdit(QLineEdit):
         
         try:
             #This will except when there's a name conflict
-            pm.PyNode(segments[-1])
+            if not cmds.objExists(segments[-1]):
+                raise ValueError(segments[-1])
             input_text = segments[-1]
         except:
             print('Name conflict. Using long name')
@@ -67,7 +76,6 @@ class HikExportEditor(cg3dguru.ui.Window):
         self.export_data_instance = cg3dcasc.CascExportData()
         self.scene_nodes = {}        
         self.spine_joints = {}
-        self.extras = {}
         
         self.data_Changing = False #maya scene changed
         self.selection_changing = False #selection set selection change is occuring
@@ -119,32 +127,15 @@ class HikExportEditor(cg3dguru.ui.Window):
         if self.rig_data is None or not self.rig_data.characterNode.inputs():
             return
         
-        #selection = pm.ls(sl=True)
-        pm.select(self.rig_data.characterNode.inputs()[0].propertyState.get(), replace=True)
-        
-        pm.runtime.ToggleAttributeEditor()    
-        visible = pm.windows.workspaceControl('AttributeEditor',visible=True,query=True)
+        character = self.rig_data.characterNode.inputs()[0]
+        property_nodes = character.propertyState.inputs()
+        if property_nodes:
+            cmds.select(property_nodes[0].name(), replace=True)
+        mel.eval("ToggleAttributeEditor")
+        visible = cmds.workspaceControl('AttributeEditor', visible=True, query=True)
         
         if not visible:
-            pm.runtime.ToggleAttributeEditor()    
-        
-        #if visible and not selection:
-            #return
-        
-        #elif visible and selection:
-            #pm.Mel.eval('commitAENotes($gAECurrentTab); copyAEWindow;')
-            #pm.select(selection, replace=True)
-            
-        #elif not visible and not selection:
-            #pm.runtime.ToggleAttributeEditor()
-            #return
-        
-        #elif not visible and selection:
-            #pm.runtime.ToggleAttributeEditor()
-            #pm.Mel.eval('commitAENotes($gAECurrentTab); copyAEWindow;')
-            #pm.runtime.ToggleAttributeEditor()
-            #pm.select(selection, replace=True)
-        
+            mel.eval("ToggleAttributeEditor")
         
     def on_global_twist_changed(self):
         if self.data_Changing or not self.rig_data or self.selection_changing:
@@ -174,33 +165,8 @@ class HikExportEditor(cg3dguru.ui.Window):
             self._init_twist_data()
                 
                   
-    #def _create_export_data(self):
-        #node, data = cg3dcasc.CascExportData.create_node(nodeType = 'objectSet')
-        #return node
-                
     def on_create_data(self, *args, **kwargs):
         self.node_to_select = utils.create_export_set()
-        
-        #data_name, ok = QInputDialog.getText(None, "New Node Name", 'Name this data')
-        #if not ok:
-            #return
-        
-        #selection = pm.ls(sl=True)
-        
-        #filtered_selection = pm.ls(sl=True,type=['transform','joint', 'skinCluster', 'mesh'])
-        #new_node, data = cg3dcasc.CascExportData.create_node(nodeType = 'objectSet')
-        #name = '{}_CSC_EXPORT'.format(data_name)
-        #pm.rename(new_node, name)
-        #self.node_to_select = new_node
-        
-        #pm.select(selection, replace=True)
-        
-        #if filtered_selection:
-            #answer =  QMessageBox.question(self.mayaWindow, 'Add', 'Add the current selection?')
-            #if answer == QMessageBox.StandardButton.Yes:
-                #if filtered_selection:
-                    #new_node.addMembers(filtered_selection)            
-            
         self.init_ui()
         
 
@@ -208,7 +174,7 @@ class HikExportEditor(cg3dguru.ui.Window):
         if not self.active_selection:
             return
 
-        pm.general.delete(self.active_selection)
+        cmds.delete(str(self.active_selection))
         self.active_selection = None
         self.init_ui()
 
@@ -232,19 +198,19 @@ class HikExportEditor(cg3dguru.ui.Window):
         char_node = nodes[char_name]
         new_set = 'New set'
         cancel = 'Cancel'
-        result = new_set if not self.active_selection else pm.confirmDialog(message="Add HIK To", button=[new_set, f'{self.active_selection.name()}', cancel])
+        result = new_set if not self.active_selection else cmds.confirmDialog(message="Add HIK To", button=[new_set, f'{self.active_selection.name()}', cancel])
         if result == cancel:
             return
 
         if result == new_set:
             node = cg3dcasc.CascExportData.create_node(nodeType='objectSet')[0]
             name = '{}_CSC_EXPORT'.format(char_node.name())
-            pm.rename(node, name)
+            node = Node(cmds.rename(str(node), name))
         else:
             node = self.active_selection
 
         data = self.qrig_data_instance.add_data(node)
-        char_node.message >> data.characterNode
+        char_node.message.connect(data.characterNode, force=True)
         self.node_to_select = node
         self.init_ui()
         
@@ -254,9 +220,9 @@ class HikExportEditor(cg3dguru.ui.Window):
             return
         
         try:
-            cg3dcasc.export_rig(new_scene, self.export_data.node()) #, qrig_data=self.rig_data, character_node=self.active_selection)
+            cg3dcasc.export_rig(new_scene, self.export_data.node())
         except cg3dcasc.SpineException:
-            pm.confirmDialog(message="You must set a chest joint before exporting",button=['Okay'])
+            cmds.confirmDialog(message="You must set a chest joint before exporting",button=['Okay'])
         
         
     def on_dynamic_changed(self, *args):
@@ -293,7 +259,7 @@ class HikExportEditor(cg3dguru.ui.Window):
             self.export_data = self.export_data_instance.get_data(self.active_selection)
             
             if not self.export_data:
-                pm.error("Casc Editor: Active node somehow doesn't have export data?!?")
+                cmds.error("Casc Editor: Active node somehow doesn't have export data?!?")
             
             self.rig_data = self.qrig_data_instance.get_data(self.active_selection)
             
@@ -337,14 +303,14 @@ class HikExportEditor(cg3dguru.ui.Window):
         
         object_set = self.export_data.node()
         selected_items = self.ui.export_list.selectedItems()
-        nodes_to_remove = []
-        for item in selected_items:
-            node = self.extras[item.text()]
-            nodes_to_remove.append(node)
-            #pm.Attribute.disconnect(node.message, self.export_data.exportNodes, nextAvailable=True)
+        nodes_to_remove = [
+            item.data(USER_ROLE)
+            for item in selected_items
+            if item.data(USER_ROLE) is not None
+        ]
             
         if nodes_to_remove:
-            object_set.removeMembers(nodes_to_remove)
+            mayautil.remove_set_members(object_set, nodes_to_remove)
             
         self._init_selection_set()
         
@@ -357,16 +323,16 @@ class HikExportEditor(cg3dguru.ui.Window):
         
         #special case for if someone adds the hikCharacterNode to an existing object set
         added_character_node = False
-        selected_character_nodes = pm.ls(sl=True, type='HIKCharacterNode')
+        selected_character_nodes = mayautil.ls(selection=True, type='HIKCharacterNode')
         invalid_nodes = self._get_invalid_characters()
         if selected_character_nodes and len(selected_character_nodes) == 1 and selected_character_nodes[0] in invalid_nodes:
             data = self.qrig_data_instance.add_data(object_set)
-            selected_character_nodes[0].message >> data.characterNode
+            selected_character_nodes[0].message.connect(data.characterNode, force=True)
             added_character_node = True
             
-        selection = pm.ls(sl=True,type=['transform','joint', 'skinCluster', 'mesh', 'file'])
+        selection = mayautil.ls(selection=True,type=['transform','joint', 'skinCluster', 'mesh', 'file'])
         if selection:
-            object_set.addMembers(selection)
+            mayautil.add_set_members(object_set, selection)
                     
         if added_character_node:
             self._init_ui(True, False)
@@ -389,18 +355,18 @@ class HikExportEditor(cg3dguru.ui.Window):
                 attr = self.rig_data.attr(attr_name)
                 inputs = attr.inputs(plugs=True)
                 if inputs:
-                    inputs[0] // attr
+                    cmds.disconnectAttr(inputs[0], attr.name())
             
         else:    
             try:
-                node = pm.PyNode(name)
-            except:
+                node = Node(name) if cmds.objExists(name) else None
+            except (RuntimeError, ValueError):
                 node = None
          
             if node:
                 if self.rig_data:
                     attr = self.rig_data.attr(attr_name)
-                    node.message >> attr  
+                    node.message.connect(attr, force=True)
 
 
     def on_spine_choice_changed(self, *args, **kwargs):
@@ -412,7 +378,7 @@ class HikExportEditor(cg3dguru.ui.Window):
             return
         
         if self.rig_data:
-            joint.message >> self.rig_data.chestJoint
+            joint.message.connect(self.rig_data.chestJoint, force=True)
             
         blank_idx = self.ui.spine_list.findText('')
         if blank_idx > -1:
@@ -426,9 +392,9 @@ class HikExportEditor(cg3dguru.ui.Window):
         
         
     def _get_invalid_characters(self):
-        hik_nodes = pm.ls(type='HIKCharacterNode')
-        valid_nodes = cg3dguru.udata.Utils.get_nodes_with_data(nodes=pm.ls(type='objectSet'), data_class=cg3dcasc.QRigData)
-        linked_characters = [node.characterNode.get() for node in valid_nodes if node.characterNode.get() is not None]
+        hik_nodes = mayautil.ls(type='HIKCharacterNode')
+        valid_nodes = cg3dguru.udata.Utils.get_nodes_with_data(nodes=mayautil.ls(type='objectSet'), data_class=cg3dcasc.QRigData)
+        linked_characters = [inputs[0] for node in valid_nodes for inputs in [node.characterNode.inputs()] if inputs]
         hik_nodes = set(hik_nodes)
         linked_characters = set(linked_characters)
         
@@ -445,23 +411,32 @@ class HikExportEditor(cg3dguru.ui.Window):
         self.ui.scene_list.clear()
             
         #Find the data in our scene
-        scene_sets = pm.ls(type='objectSet')
+        scene_sets = mayautil.ls(type='objectSet')
         data_nodes = cg3dguru.udata.Utils.get_nodes_with_data(scene_sets, data_class=cg3dcasc.CascExportData)
         
         for node in  data_nodes:
             self.scene_nodes[node.name()] = node
             
         #Build our dropdown list when the names sorted
-        node_names = list(self.scene_nodes)
-        node_names.sort()
+        scene_nodes = sorted(self.scene_nodes.values(), key=_node_sort_key)
         
         self.active_selection = None
-        if node_names:
-            for name in node_names:
-                self.ui.scene_list.addItem(name, self.scene_nodes[name])
+        if scene_nodes:
+            for node in scene_nodes:
+                self.ui.scene_list.addItem(node.short_name(), node)
+                self.ui.scene_list.setItemData(
+                    self.ui.scene_list.count() - 1, node.name(), 3
+                )
             
             if self.node_to_select:
-                idx = self.ui.scene_list.findText(self.node_to_select.name())
+                idx = next(
+                    (
+                        index
+                        for index in range(self.ui.scene_list.count())
+                        if self.ui.scene_list.itemData(index) == self.node_to_select
+                    ),
+                    -1,
+                )
                 self.node_to_select = None
                 if idx > -1:
                     self.ui.scene_list.setCurrentIndex(idx)
@@ -491,10 +466,11 @@ class HikExportEditor(cg3dguru.ui.Window):
         for spine_name, joint in spine_joints:
             self.spine_joints[joint.name()] = joint
         
-        spine_names = list(self.spine_joints)
-        spine_names.sort()
-        for name in spine_names:
-            self.ui.spine_list.addItem(name, self.spine_joints[name])
+        for joint in sorted(self.spine_joints.values(), key=_node_sort_key):
+            self.ui.spine_list.addItem(joint.short_name(), joint)
+            self.ui.spine_list.setItemData(
+                self.ui.spine_list.count() - 1, joint.name(), 3
+            )
         
         #Make an empty entry if the rig_data doesn't reference a valid spine
         #otherwise set the dropdown the matching spine
@@ -507,26 +483,29 @@ class HikExportEditor(cg3dguru.ui.Window):
             self.ui.spine_list.addItem('', None)
             self.ui.spine_list.setCurrentText('')
         else:
-            self.ui.spine_list.setCurrentText(valid_spine.name())
+            for index in range(self.ui.spine_list.count()):
+                if self.ui.spine_list.itemData(index) == valid_spine:
+                    self.ui.spine_list.setCurrentIndex(index)
+                    break
 
         
     def _init_selection_set(self):
         self.ui.export_list.clear()
-        self.extras.clear()
         
         if not self.active_selection:
             return
         
         object_set = self.export_data.node()
-        names = []
-        
-        for node in object_set.flattened():
-            if cg3dcasc.node_type_exportable(node) or isinstance(node, pm.nodetypes.File):
-                self.extras[node.name()] = node
-                names.append(node.name())
+        nodes = []
+        for node in mayautil.set_members(object_set):
+            if cg3dcasc.node_type_exportable(node) or mayautil.node_type(node) == 'file':
+                nodes.append(node)
 
-        names.sort()
-        self.ui.export_list.addItems(names)
+        for node in sorted(nodes, key=_node_sort_key):
+            item = QListWidgetItem(node.short_name())
+            item.setData(USER_ROLE, node)
+            item.setToolTip(node.name())
+            self.ui.export_list.addItem(item)
         self.ui.dynamic_set.setChecked(self.export_data.dynamicSet.get())
         
 
@@ -535,10 +514,13 @@ class HikExportEditor(cg3dguru.ui.Window):
             attr = self.rig_data.attr(attr_name)
             inputs = attr.inputs()
             if inputs:
-                ui_element.setText(inputs[0].name())
+                ui_element.setText(inputs[0].short_name())
+                ui_element.setToolTip(inputs[0].name())
 
         self.ui.left_weapon_node.setText('')
         self.ui.right_weapon_node.setText('')
+        self.ui.left_weapon_node.setToolTip('')
+        self.ui.right_weapon_node.setToolTip('')
                      
         if not self.rig_data:
             return
@@ -620,7 +602,7 @@ class HikExportEditor(cg3dguru.ui.Window):
         
         
     def _add_script_job(self, event_name, func):
-        jobId   = pm.scriptJob( event=[event_name, func] )
+        jobId = cmds.scriptJob(event=[event_name, func])
         handler = lambda : self.remove_script_job(jobId)
         self.job_handlers[jobId] = handler
         self.ui.destroyed.connect( handler )
@@ -633,13 +615,21 @@ class HikExportEditor(cg3dguru.ui.Window):
     
     
     def remove_script_job(self, jobId):
-        self.ui.destroyed.disconnect( self.job_handlers[jobId] )
-        pm.scriptJob( kill = jobId )
+        # This is called by the UI's destroyed signal. Qt tears down signal
+        # connections as part of destruction, so disconnecting the currently
+        # executing callback produces a RuntimeWarning in PySide.
+        self.job_handlers.pop(jobId, None)
+        if cmds.scriptJob(exists=jobId):
+            try:
+                cmds.scriptJob(kill=jobId, force=True)
+            except RuntimeError:
+                # Maya may already be shutting down when the widget dies.
+                pass
         
   
         
 def run(*args):
-    filepath = os.path.join(cg3dcasc.__path__[0],  'Cascadeur.ui' )
+    filepath = os.path.join(cg3dcasc.__path__[0], 'Cascadeur.ui')
     editor = HikExportEditor(WINDOW_NAME, filepath)
 
     editor.ui.resize(editor.ui.layout().minimumSize())

@@ -2,7 +2,7 @@
 import socket
 import json
 import struct
-import pymel.core as pm
+from maya import cmds
 from . import command_port
 
 from cg3dcasc import preferences
@@ -65,8 +65,7 @@ def send_to_casc(cmd):
         casc = wingcarrier.pigeons.CascadeurPigeon()
 
         if not casc.send_python_command(cmd):
-            #pm.confirmDialog(message="Please make sure Cascadeur is running and try again.", button=['Okay'])
-            pm.displayError("Please make sure Cascadeur is running and try again.")
+            cmds.error("Please make sure Cascadeur is running and try again.")
         else:
             success = True
 
@@ -93,8 +92,8 @@ def send_and_listen(cmd):
             with conn:
                 success, data = handle_client(conn, addr)
         except socket.timeout:
-            pm.warning(f"No connection received within {TIMEOUT_SECONDS} seconds. Shutting down.")
+            cmds.warning(f"No connection received within {TIMEOUT_SECONDS} seconds. Shutting down.")
         except Exception as e:
-            pm.error(f"An unexpected error occurred: {e}")
+            cmds.error(f"An unexpected error occurred: {e}")
 
     return (success, data)

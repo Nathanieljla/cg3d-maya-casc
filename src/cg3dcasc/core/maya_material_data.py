@@ -1,288 +1,277 @@
-"""
-maya_material_data.py
-=====================
-``MayaMaterialData`` — a ``BaseMaterialData`` subclass that extracts material
-properties from Maya meshes via ``pymel``.
-
-Supported shader types
-----------------------
-- **aiStandardSurface** (Arnold)
-- **lambert**
-- **blinn**
-- **phong**
-- **phongE**
-
-All attribute names are normalised to canonical names at extraction time
-(see ``BaseMaterialData`` for the canonical vocabulary).
-"""
+"""Extract canonical material data from Maya shading networks."""
 
 from __future__ import annotations
 
-import pathlib
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-import pymel.core as pm
+from maya import cmds
+from maya.api import OpenMaya as om
 
-# Import BaseMaterialData — adjust the import path as needed for your
-# packaging setup.  The two-try block mirrors the pattern in core.py.
-try:
-    from cg3dcasc.material_data import (
-        BaseMaterialData,
-        MaterialConverter,
-        FilamentMaterialData,
-    )
-except ImportError:
-    from material_data import (
-        BaseMaterialData,
-        MaterialConverter,
-        FilamentMaterialData,
-    )
+from cg3dguru.maya import node_name
 
+from cg3dcasc.material_data import (
+    BaseMaterialData,
+    FilamentMaterialData,
+    MaterialConverter,
+)
 
-# ---------------------------------------------------------------------------
-# Attribute mapping tables: (shader_type, maya_attr) → canonical_attr
-# ---------------------------------------------------------------------------
-
-# Each shader type declares which Maya attributes to query and what canonical
-# name they map to.  Order matters — attributes are queried in the order
-# listed.
-#
-# The dict is keyed by shader type name (the string returned by
-# ``pm.nodeType(shader)``).  Values are lists of (maya_attr, canonical_name).
 
 _SHADER_ATTR_MAP: Dict[str, List[Tuple[str, str]]] = {
-    # ── Arnold Standard Surface ──────────────────────────────────────────
+    "standardSurface": [
+        ("baseColor", "BaseColor"),
+        ("metalness", "Metallic"),
+        ("specularColor", "Specular"),
+        ("specularRoughness", "Roughness"),
+        ("normalCamera", "Normal"),
+        ("emissionColor", "EmissiveColor"),
+        ("opacity", "Opacity"),
+        ("coat", "Coat"),
+        ("coatRoughness", "CoatRoughness"),
+    ],
     "aiStandardSurface": [
-        ("baseColor",          "BaseColor"),
-        ("metalness",          "Metallic"),
-        ("specularColor",      "Specular"),
-        ("specularRoughness",  "Roughness"),
-        ("normalCamera",       "Normal"),
-        ("emissionColor",      "EmissiveColor"),
-        ("opacity",            "Opacity"),
-        ("coat",               "Coat"),
-        ("coatRoughness",      "CoatRoughness"),
+        ("baseColor", "BaseColor"),
+        ("metalness", "Metallic"),
+        ("specularColor", "Specular"),
+        ("specularRoughness", "Roughness"),
+        ("normalCamera", "Normal"),
+        ("emissionColor", "EmissiveColor"),
+        ("opacity", "Opacity"),
+        ("coat", "Coat"),
+        ("coatRoughness", "CoatRoughness"),
     ],
-    # ── Lambert ──────────────────────────────────────────────────────────
     "lambert": [
-        ("color",              "BaseColor"),
-        ("transparency",       "Transparency"),
-        ("ambientColor",       "AmbientOcclusion"),
-        ("incandescence",      "EmissiveColor"),
-        ("normalCamera",       "Normal"),
+        ("color", "BaseColor"),
+        ("transparency", "Transparency"),
+        ("ambientColor", "AmbientOcclusion"),
+        ("incandescence", "EmissiveColor"),
+        ("normalCamera", "Normal"),
     ],
-    # ── Blinn ────────────────────────────────────────────────────────────
     "blinn": [
-        ("color",              "BaseColor"),
-        ("transparency",       "Transparency"),
-        ("ambientColor",       "AmbientOcclusion"),
-        ("incandescence",      "EmissiveColor"),
-        ("normalCamera",       "Normal"),
-        ("specularColor",      "Specular"),
-        ("eccentricity",       "Roughness"),
-        ("specularRollOff",    "SpecularRollOff"),
+        ("color", "BaseColor"),
+        ("transparency", "Transparency"),
+        ("ambientColor", "AmbientOcclusion"),
+        ("incandescence", "EmissiveColor"),
+        ("normalCamera", "Normal"),
+        ("specularColor", "Specular"),
+        ("eccentricity", "Roughness"),
+        ("specularRollOff", "SpecularRollOff"),
     ],
-    # ── Phong ────────────────────────────────────────────────────────────
     "phong": [
-        ("color",              "BaseColor"),
-        ("transparency",       "Transparency"),
-        ("ambientColor",       "AmbientOcclusion"),
-        ("incandescence",      "EmissiveColor"),
-        ("normalCamera",       "Normal"),
-        ("specularColor",      "Specular"),
-        ("cosinePower",        "Roughness"),  # will need inversion at convert time
+        ("color", "BaseColor"),
+        ("transparency", "Transparency"),
+        ("ambientColor", "AmbientOcclusion"),
+        ("incandescence", "EmissiveColor"),
+        ("normalCamera", "Normal"),
+        ("specularColor", "Specular"),
+        ("cosinePower", "Roughness"),
     ],
-    # ── PhongE ───────────────────────────────────────────────────────────
     "phongE": [
-        ("color",              "BaseColor"),
-        ("transparency",       "Transparency"),
-        ("ambientColor",       "AmbientOcclusion"),
-        ("incandescence",      "EmissiveColor"),
-        ("normalCamera",       "Normal"),
-        ("highlightSize",      "Roughness"),
-        ("roughness",          "SpecularRollOff"),
+        ("color", "BaseColor"),
+        ("transparency", "Transparency"),
+        ("ambientColor", "AmbientOcclusion"),
+        ("incandescence", "EmissiveColor"),
+        ("normalCamera", "Normal"),
+        ("highlightSize", "Roughness"),
+        ("roughness", "SpecularRollOff"),
+    ],
+    "usdPreviewSurface": [
+        ("diffuseColor", "BaseColor"),
+        ("metallic", "Metallic"),
+        ("roughness", "Roughness"),
+        ("normal", "Normal"),
+        ("emissiveColor", "EmissiveColor"),
+        ("opacity", "Opacity"),
+        ("occlusion", "AmbientOcclusion"),
     ],
 }
 
+_TEXTURE_CHANNELS = {
+    "outColorR": 0,
+    "outColorG": 1,
+    "outColorB": 2,
+    "outAlpha": 3,
+}
 
-# ---------------------------------------------------------------------------
-# MayaMaterialData
-# ---------------------------------------------------------------------------
 
 class MayaMaterialData(BaseMaterialData):
-    """Extract and store material data from Maya meshes.
+    """Canonical material values extracted from Maya mesh nodes."""
 
-    Usage::
-
-        selected = pm.selected()
-        data = MayaMaterialData.from_mesh(selected)
-        data.save("/path/to/materials.json")
-    """
-
-    # Expose the mapping so callers can inspect / extend it at runtime
     SHADER_ATTR_MAP = _SHADER_ATTR_MAP
 
     @classmethod
     def from_mesh(cls, mesh_objs: Any) -> "MayaMaterialData":
-        """Parse materials from one or more Maya mesh transforms / shapes.
-
-        Parameters
-        ----------
-        mesh_objs :
-            A single ``PyNode``, a list of ``PyNode`` objects, or anything
-            accepted by ``pm.ls(…, dagObjects=True)``.
-
-        Returns
-        -------
-        MayaMaterialData
-            Populated instance with canonical attribute names.
-        """
-        if not isinstance(mesh_objs, (list, tuple)):
+        if not isinstance(mesh_objs, (list, tuple, set)):
             mesh_objs = [mesh_objs]
 
         data = cls()
-
-        # Resolve to shape nodes
-        shapes: List[pm.PyNode] = []
+        shapes = []
         for obj in mesh_objs:
-            if obj.type() == "mesh":
-                shapes.append(obj)
+            obj_name = node_name(obj)
+            if cmds.nodeType(obj_name) == "mesh":
+                shapes.append(obj_name)
             else:
-                shapes.extend(pm.listRelatives(obj, shapes=True, noIntermediate=True) or [])
+                shapes.extend(
+                    cmds.listRelatives(
+                        obj_name,
+                        shapes=True,
+                        noIntermediate=True,
+                        type="mesh",
+                        fullPath=True,
+                    )
+                    or []
+                )
 
+        shapes = sorted(set(shapes))
         if not shapes:
-            pm.warning("MayaMaterialData: no mesh shapes found in the provided objects.")
+            cmds.warning("MayaMaterialData: no mesh shapes were found.")
             return data
 
-        # Use the first transform's name as mesh_name (or combine)
-        parents = list({s.getParent().name() for s in shapes})
-        data.mesh_name = parents[0] if len(parents) == 1 else "|".join(sorted(parents))
+        parents = {
+            parent
+            for shape in shapes
+            for parent in (cmds.listRelatives(shape, parent=True, fullPath=True) or [])
+        }
+        data.mesh_name = (
+            next(iter(parents)) if len(parents) == 1 else "|".join(sorted(parents))
+        )
 
-        # Iterate shapes → shading engines → shaders
         seen_shaders: Set[str] = set()
         for shape in shapes:
-            sgs = pm.listConnections(shape, type="shadingEngine") or []
-            for sg in sgs:
-                shaders = pm.listConnections(
-                    f"{sg}.surfaceShader", source=True, destination=False
+            for shading_group in cls._shading_groups(shape):
+                shaders = cmds.listConnections(
+                    shading_group + ".surfaceShader",
+                    source=True,
+                    destination=False,
                 ) or []
                 for shader in shaders:
-                    shader_name = shader.name()
-                    if shader_name in seen_shaders:
+                    if shader in seen_shaders:
                         continue
-                    seen_shaders.add(shader_name)
-
-                    attrs = cls._extract_shader(shader)
-                    if attrs:
-                        data.materials[shader_name] = attrs
-
+                    seen_shaders.add(shader)
+                    attributes = cls._extract_shader(shader)
+                    if attributes:
+                        data.materials[shader] = attributes
         return data
 
-    # -- private extraction helpers -----------------------------------------
+    @staticmethod
+    def _shading_groups(shape: str) -> List[str]:
+        """Return shading groups assigned to this specific DAG instance."""
+        instance_number = 0
+        try:
+            selection = om.MSelectionList()
+            selection.add(shape)
+            instance_number = selection.getDagPath(0).instanceNumber()
+        except RuntimeError:
+            pass
+
+        groups = cmds.listConnections(
+            "{}.instObjGroups[{}]".format(shape, instance_number),
+            source=False,
+            destination=True,
+            type="shadingEngine",
+        ) or []
+        if not groups:
+            groups = cmds.listConnections(shape, type="shadingEngine") or []
+        return list(dict.fromkeys(groups))
 
     @classmethod
-    def _extract_shader(cls, shader: pm.PyNode) -> Optional[Dict[str, Dict[str, Any]]]:
-        """Extract canonical attributes from a single shader node."""
-        shader_type = pm.nodeType(shader)
-        attr_list = _SHADER_ATTR_MAP.get(shader_type)
-
-        if attr_list is None:
-            pm.warning(
-                f"MayaMaterialData: unsupported shader type '{shader_type}' "
-                f"on '{shader.name()}' — skipping."
+    def _extract_shader(
+        cls, shader: str
+    ) -> Optional[Dict[str, Dict[str, Any]]]:
+        shader_type = cmds.nodeType(shader)
+        attribute_map = cls.SHADER_ATTR_MAP.get(shader_type)
+        if attribute_map is None:
+            cmds.warning(
+                "MayaMaterialData: unsupported shader type '{}' on '{}'.".format(
+                    shader_type, shader
+                )
             )
             return None
 
-        attributes: Dict[str, Dict[str, Any]] = {}
-        for maya_attr, canonical_name in attr_list:
-            if not hasattr(shader, maya_attr):
+        attributes = {}
+        for maya_attribute, canonical_name in attribute_map:
+            if not cmds.attributeQuery(maya_attribute, node=shader, exists=True):
                 continue
-            entry = cls._read_attribute(shader, maya_attr)
+            entry = cls._read_attribute(shader, maya_attribute)
             if entry is not None:
                 attributes[canonical_name] = entry
-
         return attributes
 
     @classmethod
     def _read_attribute(
-        cls, shader: pm.PyNode, maya_attr: str
+        cls, shader: str, maya_attribute: str
     ) -> Optional[Dict[str, Any]]:
-        """Read a single attribute from *shader* and return a canonical entry.
-
-        Returns ``None`` if the attribute doesn't exist or is unreadable.
-        """
-        attr_plug = getattr(shader, maya_attr, None)
-        if attr_plug is None:
-            return None
-
-        # 1. Check for connected texture file node(s)
-        texture_path = cls._find_texture(attr_plug)
-        if texture_path:
-            return {"type": "texture", "value": [texture_path]}
-
-        # 2. Fallback to reading the constant value
+        plug = "{}.{}".format(shader, maya_attribute)
+        texture = cls._find_texture(plug)
+        if texture:
+            texture_path, texture_channel = texture
+            entry = {"type": "texture", "value": [texture_path]}
+            if texture_channel is not None:
+                entry["channel"] = texture_channel
+            return entry
         try:
-            raw = attr_plug.get()
-        except Exception:
+            return cls._constant_entry(cmds.getAttr(plug))
+        except (RuntimeError, ValueError, TypeError):
             return None
 
-        return cls._constant_entry(raw)
+    @staticmethod
+    def _find_texture(plug: str) -> Optional[Tuple[str, Optional[int]]]:
+        file_channels = {}
+        source_plugs = cmds.listConnections(
+            plug,
+            source=True,
+            destination=False,
+            plugs=True,
+            skipConversionNodes=True,
+        ) or []
+        for source_plug in source_plugs:
+            node, unused_separator, output = source_plug.partition(".")
+            if cmds.nodeType(node) == "file":
+                file_channels[node] = _TEXTURE_CHANNELS.get(
+                    output.rsplit(".", 1)[-1]
+                )
 
-    @classmethod
-    def _find_texture(cls, attr_plug) -> Optional[str]:
-        """Walk upstream connections from *attr_plug* looking for a ``file``
-        texture node.  Returns the file path string or ``None``.
-        """
-        # Direct connections first
-        connections = pm.listConnections(attr_plug, source=True, destination=False) or []
-
-        # Also look deeper — some setups chain through utility nodes
-        file_nodes = pm.findType(connections, type="file", forward=False, deep=True) if connections else []
-
-        if not file_nodes:
-            # Try finding file nodes among direct connections themselves
-            file_nodes = [c for c in connections if pm.nodeType(c) == "file"]
-
+        connections = cmds.listConnections(
+            plug, source=True, destination=False, skipConversionNodes=False
+        ) or []
+        file_nodes = {node for node in connections if cmds.nodeType(node) == "file"}
+        for connection in connections:
+            file_nodes.update(
+                node
+                for node in (cmds.listHistory(connection, pruneDagObjects=True) or [])
+                if cmds.nodeType(node) == "file"
+            )
         if not file_nodes:
             return None
-
-        # Use the first file node found
-        file_node = pm.PyNode(file_nodes[0])
-        filepath = file_node.fileTextureName.get()
+        file_node = sorted(file_nodes)[0]
+        filepath = cmds.getAttr(file_node + ".fileTextureName")
         if not filepath:
             return None
+        return filepath.replace("\\", "/"), file_channels.get(file_node)
 
-        # Normalise path separators
-        return filepath.replace("\\", "/")
-
-    @classmethod
-    def _constant_entry(cls, raw: Any) -> Optional[Dict[str, Any]]:
-        """Convert a raw Maya attribute value into a canonical constant entry."""
+    @staticmethod
+    def _constant_entry(raw: Any) -> Optional[Dict[str, Any]]:
         if raw is None:
             return None
-
-        # PyMel colour / vector types are tuple-like
+        if (
+            isinstance(raw, (tuple, list))
+            and len(raw) == 1
+            and isinstance(raw[0], (tuple, list))
+        ):
+            raw = raw[0]
+        if isinstance(raw, bool):
+            return {"type": "scalar", "value": 1.0 if raw else 0.0}
         if isinstance(raw, (tuple, list)):
-            values = [float(v) for v in raw]
+            values = [float(value) for value in raw]
             if len(values) == 1:
                 return {"type": "scalar", "value": values[0]}
             return {"type": "vector", "value": values}
-
         if isinstance(raw, (int, float)):
             return {"type": "scalar", "value": float(raw)}
-
-        # Some attributes return True/False
-        if isinstance(raw, bool):
-            return {"type": "scalar", "value": 1.0 if raw else 0.0}
-
         return None
 
 
-# ---------------------------------------------------------------------------
-# Register Maya → Filament converter
-# ---------------------------------------------------------------------------
 MaterialConverter.register(
     MayaMaterialData,
     FilamentMaterialData,
-    {k: v for k, v in FilamentMaterialData.CANONICAL_TO_FILAMENT.items()},
+    dict(FilamentMaterialData.CANONICAL_TO_FILAMENT),
 )

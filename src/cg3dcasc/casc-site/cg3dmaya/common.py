@@ -211,7 +211,12 @@ def add_selection_to(new_set: bool):
     dialog_buttons = []
     for target_set in target_sets:
         dialog_buttons.append(
-            csc.view.DialogButton(target_set.name, lambda: _add_to_set(scene, new_roots, target_set))
+            csc.view.DialogButton(
+                target_set.name,
+                lambda target_set=target_set: _add_to_set(
+                    scene, new_roots, target_set
+                ),
+            )
         )
         
     dialog_buttons.append(csc.view.DialogButton(csc.view.StandardButton.Cancel))
@@ -287,7 +292,12 @@ def select_set_members():
     dialog_buttons = []
     for target_set in target_sets:
         dialog_buttons.append(
-            csc.view.DialogButton(target_set.name, lambda: _select_set_members(scene, target_set))
+            csc.view.DialogButton(
+                target_set.name,
+                lambda target_set=target_set: _select_set_members(
+                    scene, target_set
+                ),
+            )
         )
         
     dialog_buttons.append(csc.view.DialogButton(csc.view.StandardButton.Cancel))

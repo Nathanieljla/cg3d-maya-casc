@@ -699,7 +699,7 @@ class ModuleManager(QThread):
         
         """
         maya_version = str(self.maya_version)
-        relative_path = '.\{0}'.format(self.relative_module_path)        
+        relative_path = '.\\{0}'.format(self.relative_module_path)
         platform_name =  self.get_platform_string(Commandline.get_platform())
         
         if not self._version_specific:
@@ -935,13 +935,6 @@ class ModuleManager(QThread):
         return True
     
                 
-    def install_pymel(self):
-        """Installs pymel to a common Maya location"""
-        if not self.package_installed('pymel'):
-            Commandline.pip_install('pymel')
-        
-    
-    
 ##-----begin UI----##
     
 class IconButton(QPushButton):
@@ -1095,14 +1088,10 @@ class InstallerUi(QWidget):
         self.post_error_messsage =  post_error_messsage
         self.show_dev_menu = show_dev_menu
 
-        self.pymel_button = None
         self.create_layout(background_color, company_logo_size)
         self.set_default_size(name)
         self.install_button.clicked.connect(self.on_action)
         self.close_button.clicked.connect(self.on_close)
-        if self.pymel_button is not None:
-            self.pymel_button.clicked.connect(self.install_pymel)
-
         
         
     def contextMenuEvent(self, event):
@@ -1218,18 +1207,6 @@ class InstallerUi(QWidget):
         self.movie.setDevice(self.device)
         self.animated_gif = QLabel()
 
-        #pymel_installed = False
-        #try:
-            #import pymel
-            #pymel_installed = True
-            #print(pymel.__file__)
-        #except:
-            #pass
-
-        #if not pymel_installed:
-            #self.pymel_button = IconButton('Install PyMel', highlight=True)
-            #self.pymel_button.setMinimumHeight(42)
-            
         self.animated_gif.setMovie(self.movie)
         self.animated_gif.setMaximumHeight(24)
         self.animated_gif.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
@@ -1245,9 +1222,6 @@ class InstallerUi(QWidget):
         message_layout.setAlignment(Qt.AlignCenter)
         outer.addLayout(message_layout)
 
-        if self.pymel_button:
-            outer.addWidget(self.pymel_button, 0)
-      
         button_layout = QHBoxLayout()
         button_layout.addStretch()
         button_layout.addWidget(self.install_button, 0)
@@ -1279,7 +1253,7 @@ class InstallerUi(QWidget):
         
         
         if self.module_manager.pre_action(self.upgradable, self.is_uninstall):
-            self.connect(self.module_manager, SIGNAL('finished()'), self.done)
+            self.module_manager.finished.connect(self.done)
             self.module_manager.start()
         else:
             self.close_button.show()
@@ -1301,10 +1275,6 @@ class InstallerUi(QWidget):
             self.message_label.setText(self._message(self.post_error_messsage))
     
     
-    def install_pymel(self):
-        self.module_manager.install_pymel()
-        self.pymel_button.hide()
-
 
     def on_close(self):
         self.close()
@@ -1555,13 +1525,6 @@ class MyInstaller(ModuleManager):
     
     def uninstall(self):
         uninstalled = False
-        #try:
-            #import cg3dcasc.menu
-            #import maya.cmds as cmds
-            #cmds.deleteUI(cg3dcasc.menu.MENU_ITEM.menu_instance)
-        #except Exception as e:
-            #print(e)
-            
         try:
             mod_file = pathlib.Path(os.path.join(self.install_root, (self.module_name + '.mod')))
             if mod_file.exists():
@@ -1597,8 +1560,8 @@ class MyInstaller(ModuleManager):
     
 def main():
     if MAYA_RUNNING:
-        MODULE_NAME = 'cascadeur'
-        MODULE_VERSION = 1.6
+        MODULE_NAME = 'cascadeur_v2'
+        MODULE_VERSION = 2.0
         PACKAGE_NAME = "cg3d-maya-casc"
         
         manager = MyInstaller(MODULE_NAME, MODULE_VERSION, package_name = PACKAGE_NAME)

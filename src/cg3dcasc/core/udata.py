@@ -1,9 +1,8 @@
 
 import uuid
 
-import pymel.core as pm
-
 import cg3dguru.udata
+from cg3dguru.maya import has_attr
 
 
 class CascadeurTextures(cg3dguru.udata.BaseData):
@@ -57,16 +56,12 @@ class QRigData(cg3dguru.udata.BaseData):
 
             cg3dguru.udata.Attr('leftArmTwist', 'enum', enumName='X:Y:Z'),
             cg3dguru.udata.Attr('leftForearmTwist', 'enum', enumName='X:Y:Z'),
-
             cg3dguru.udata.Attr('leftUpperLegTwist', 'enum', enumName='X:Y:Z'),
             cg3dguru.udata.Attr('leftLegTwist', 'enum', enumName='X:Y:Z'),
-
             cg3dguru.udata.Attr('rightArmTwist', 'enum', enumName='X:Y:Z'),
             cg3dguru.udata.Attr('rightForearmTwist', 'enum', enumName='X:Y:Z'),
-
             cg3dguru.udata.Attr('rightUpperLegTwist', 'enum', enumName='X:Y:Z'),
             cg3dguru.udata.Attr('rightLegTwist', 'enum', enumName='X:Y:Z'),
-
         ]
         
         return attrs
@@ -89,6 +84,8 @@ class CascExportData(cg3dguru.udata.BaseData):
 
     LEGACY_0_1_0 = 0
     LATEST       = 1
+    EMBED_TEXTURES = 0
+    REFERENCE_TEXTURES = 1
     """export_version enum values.
 
     Every format gets an explicit index in the enum string, so adding a new
@@ -100,13 +97,20 @@ class CascExportData(cg3dguru.udata.BaseData):
 
     @classmethod
     def get_class_version(cls):
-        return (0, 2, 0)
+        return (0, 3, 0)
 
     @classmethod
     def get_attributes(cls):
         attrs = [
             cg3dguru.udata.create_attr('cscDataId', 'string'),
             cg3dguru.udata.create_attr('dynamicSet', 'bool'),
+            cg3dguru.udata.create_attr(
+                'texture_export', 'enum',
+                enumName='Embed={0}:Reference={1}'.format(
+                    cls.EMBED_TEXTURES, cls.REFERENCE_TEXTURES
+                ),
+                defaultValue=cls.REFERENCE_TEXTURES,
+            ),
             cg3dguru.udata.create_attr('textureLocation', 'string'),
             cg3dguru.udata.create_attr('export_version', 'enum',
                                        enumName = '0_1_0={0}:Latest={1}'.format(
@@ -123,10 +127,10 @@ class CascExportData(cg3dguru.udata.BaseData):
         """Returns the export_version index for the given data block.
 
         Args:
-            data (pymel.general.Attr) : a CascExportData data block.
+            data (cg3dguru.maya.Attribute): a CascExportData data block.
         """
         node = data.node()
-        if not pm.hasAttr(node, 'export_version'):
+        if not has_attr(node, 'export_version'):
             #0.1.0 data that hasn't been version updated yet. Referenced
             #nodes can't be updated at all, so they stay in this state.
             return cls.LEGACY_0_1_0
@@ -142,6 +146,24 @@ class CascExportData(cg3dguru.udata.BaseData):
         old export logic, as that's the safe direction.
         """
         return cls.get_export_version(data) != cls.LATEST
+
+
+    @classmethod
+    def get_embed_textures(cls, data):
+        """Return whether this export set embeds its texture media."""
+        return cls.get_texture_mode(data) == cls.EMBED_TEXTURES
+
+
+    @classmethod
+    def get_texture_mode(cls, data):
+        """Return the Embed/Reference enum value for this export set."""
+        return data.node().attr('texture_export').get(asString=False)
+
+
+    @classmethod
+    def references_textures(cls, data):
+        """Return whether Cascadeur should apply referenced texture data."""
+        return cls.get_texture_mode(data) == cls.REFERENCE_TEXTURES
 
 
     @classmethod

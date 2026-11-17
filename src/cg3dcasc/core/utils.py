@@ -1,68 +1,62 @@
+"""Proxy-rig and utility workflows implemented with Maya's native APIs."""
+
 from pathlib import Path
 import time
-import enum
 
-from maya import OpenMayaUI as omui 
-import pymel.core as pm
-import maya.cmds as cmds
-import maya.mel
+from maya import cmds, mel
+from maya.api import OpenMaya as om
 
 try:
-    from PySide2.QtWidgets import *
-    from PySide2.QtGui import *
-    from shiboken2 import wrapInstance
-except:
-    from PySide6.QtWidgets import *
-    from PySide6.QtGui import *
-    from shiboken6 import wrapInstance   
-
+    from PySide2.QtWidgets import QInputDialog, QMessageBox
+except ImportError:
+    from PySide6.QtWidgets import QInputDialog, QMessageBox
 
 import cg3dguru.ui
-from . import common
-from . import server
-from . import materials
-from . import hik
-from .udata import *
-
-CLONE_PREFIX = 'CASC'
+import cg3dguru.udata
+from cg3dguru.maya import Node, node_name, nodes
 
 from cg3dcasc import preferences
 
+from . import common, hik, materials, server
+from . import maya as mayautil
+from .udata import CascExportData, ProxyData, ProxyRoot
 
-gMainProgressBar = maya.mel.eval('$tmp = $gMainProgressBar')
+
+CLONE_PREFIX = "CASC"
 progress_bar = False
+if cmds.about(batch=True):
+    gMainProgressBar = None
+else:
+    try:
+        gMainProgressBar = mel.eval("$tmp = $gMainProgressBar")
+    except RuntimeError:
+        gMainProgressBar = None
 
 
 def start_progress_bar(*args, **kwargs):
-    global progress_bar, gMainProgressBar
+    global progress_bar
+    if not gMainProgressBar:
+        return
     progress_bar = True
-
-    kwargs['edit'] = True
-    kwargs['beginProgress'] = True
-    kwargs['visible'] = True
+    kwargs.update(edit=True, beginProgress=True, visible=True)
     cmds.progressBar(gMainProgressBar, *args, **kwargs)
 
-    
+
 def edit_progress_bar(*args, **kwargs):
-    kwargs['edit'] = True
-    cmds.progressBar(gMainProgressBar, *args, **kwargs)
+    if gMainProgressBar:
+        kwargs["edit"] = True
+        cmds.progressBar(gMainProgressBar, *args, **kwargs)
 
 
 def wait_cursor(func):
     def wrapper(*args, **kwargs):
-        pm.waitCursor(state=True)
-        result = None
+        cmds.waitCursor(state=True)
         try:
-            result = func(*args, **kwargs)
-        except Exception as e:
-            raise e
-        else:
-            return result
+            return func(*args, **kwargs)
         finally:
-            pm.waitCursor(state=False)
-            
-            global progress_bar, gMainProgressBar
-            if progress_bar:
+            cmds.waitCursor(state=False)
+            global progress_bar
+            if progress_bar and gMainProgressBar:
                 progress_bar = False
                 cmds.progressBar(gMainProgressBar, edit=True, endProgress=True)
 
@@ -70,622 +64,545 @@ def wait_cursor(func):
 
 
 def _walk_up(transform, parents, keep):
-    parent = transform.getParent()
+    parent = mayautil.parent(transform)
     if parent is None:
         return
-
     if parent in parents:
         keep.add(parent)
         return
-
     parents.add(parent)
     _walk_up(parent, parents, keep)
-    
-    
+
+
 def _get_closest_parent(transform, keep):
-    parent = transform.getParent()
-    if parent is None:
-        return
-
-    if parent in keep:
+    parent = mayautil.parent(transform)
+    if parent is None or parent in keep:
         return parent
-
     return _get_closest_parent(parent, keep)
-    
+
 
 def _solve_joint_hierarchy(joints):
-    joint_hierarchy = {}
-    
-    keep = set()
+    hierarchy = {}
+    keep = set(joints)
     parents = set()
     for joint in joints:
-        keep.add(joint)
         _walk_up(joint, parents, keep)
+    for transform in keep:
+        hierarchy.setdefault(_get_closest_parent(transform, keep), []).append(transform)
+    return hierarchy
 
-    for tranform in keep:
-        parent = _get_closest_parent(tranform, keep)
-        joint_hierarchy.setdefault(parent, set()).add(tranform)
-        
-    for key in joint_hierarchy.keys():
-        joint_hierarchy[key] = list(joint_hierarchy[key])
-        
-    return joint_hierarchy
 
-  
-def _map_proxy(org, proxy, mapping):
-    mapping[org] = proxy
-    mapping[proxy] = org
-    
-    ProxyData.add_data(proxy)
-    org.message >> proxy.proxySource
-    
-    
+def _map_proxy(original, proxy, mapping):
+    original = mayautil.as_node(original)
+    proxy = mayautil.as_node(proxy)
+    mapping[original] = proxy
+    mapping[proxy] = original
+    data = ProxyData.add_data(proxy)
+    original.message.connect(data.proxySource, force=True)
+
+
 def new_world_matrix(transform, reset_scale):
-    # Create a new matrix with scale set to (1, 1, 1)
-    new_matrix = pm.datatypes.TransformationMatrix(transform.getMatrix(worldSpace=True))
+    matrix = om.MTransformationMatrix(mayautil.world_matrix(transform))
     if reset_scale:
-        new_matrix.setScale((1, 1, 1), space='world')
-    
-    return new_matrix
-        
+        matrix.setScale((1.0, 1.0, 1.0), om.MSpace.kWorld)
+    return matrix.asMatrix()
+
 
 def get_base_name(obj):
-    return obj.name().split(":")[-1]
-        
-        
+    return node_name(obj).split("|")[-1].split(":")[-1]
+
+
 def _clone_joints(children, parent, joint_hierarchy, clone_pairing):
     reset_scale = preferences.get().derig_reset_joint_scale
-    convert_transforms = False
-
-    edit_progress_bar(status='Cloning Joints', progress=0, maxValue=len(children))
-
+    edit_progress_bar(status="Cloning Joints", progress=0, maxValue=len(children))
     for child in children:
-        edit_progress_bar(status='Cloning Joints', step=1)
-        child_type = child.type()
-        new_type = 'joint' if child_type == 'joint' or convert_transforms else 'transform'
-        clone = pm.general.createNode(new_type, name=f"{CLONE_PREFIX}:{get_base_name(child)}", parent=parent, skipSelect=True)
+        edit_progress_bar(status="Cloning Joints", step=1)
+        child_type = mayautil.node_type(child)
+        new_type = "joint" if child_type == "joint" else "transform"
+        clone = Node(
+            cmds.createNode(
+                new_type,
+                name="{}:{}".format(CLONE_PREFIX, get_base_name(child)),
+                parent=node_name(parent),
+                skipSelect=True,
+            )
+        )
         _map_proxy(child, clone, clone_pairing)
-
-        if new_type == 'joint' and child_type == 'joint':
-            clone.radius.set(child.radius.get())
-        
-        cm = new_world_matrix(child, reset_scale)
-        clone.setMatrix(cm, worldSpace=True)
-        
+        if new_type == "joint" and child_type == "joint":
+            cmds.setAttr(clone.name() + ".radius", cmds.getAttr(node_name(child) + ".radius"))
+        mayautil.set_world_matrix(clone, new_world_matrix(child, reset_scale))
         next_children = joint_hierarchy.get(child, [])
         if next_children:
             _clone_joints(next_children, clone, joint_hierarchy, clone_pairing)
 
-          
-def _get_index_mapping(source_cluster, cloned_cluster, clone_pairing):
-    cloned_indices = {element.inputs()[0]: element.index() for element in cloned_cluster.matrix}
-    
-    index_mapping = {}
-    for element in source_cluster.matrix:
-        index_mapping[element.index()] = cloned_indices[clone_pairing[element.inputs()[0]]]
 
-    return index_mapping
-    
-      
-def _get_transform_attrs(obj):
-    #You can lock/unlock individual attributes, but the compound attribute
-    #might also be locked so you need to make sure it matches the same state.
-    #This took way to long to figure out
-    attrs = ['translate', 'tx', 'ty', 'tz', 'rotate', 'rx', 'ry', 'rz', 'scale', ' sx', 'sy', 'sz']
-    return [obj.attr(name) for name in attrs]
+def _transform_attributes(obj):
+    name = node_name(obj)
+    return [
+        "{}.{}".format(name, attribute)
+        for attribute in (
+            "translate", "tx", "ty", "tz", "rotate", "rx", "ry", "rz",
+            "scale", "sx", "sy", "sz",
+        )
+    ]
 
-      
+
 def _lock_transform(obj, state):
-    attrs = _get_transform_attrs(obj)
+    for attribute in _transform_attributes(obj):
+        cmds.setAttr(attribute, lock=state)
 
-    for attr in attrs:
-        pm.setAttr(attr, lock=state)
- 
-    
-def _Unhide_primary_attrs(obj):
-    attrs = _get_transform_attrs(obj)
 
-    for attr in attrs:
-        pm.setAttr(attr, keyable=True)    
-    
+def _unhide_primary_attrs(obj):
+    for attribute in _transform_attributes(obj):
+        cmds.setAttr(attribute, keyable=True)
     _lock_transform(obj, False)
-    pm.setAttr(obj.visibility, lock=False)
-    
+    cmds.setAttr(node_name(obj) + ".visibility", lock=False)
 
-def _replace(p1, p1_idx, p2, p2_idx, skin_cluster_node, attr_list):
-    new_data = attr_list.elementByLogicalIndex(p1_idx)
-    old_data = attr_list.elementByLogicalIndex(p2_idx)
 
-    list_locked = attr_list.isLocked()
-    old_data_locked = old_data.isLocked()
-    
-    attr_list.unlock()    
-    old_data.unlock()
-    new_data.unlock()
-
-    new_plug = new_data.inputs(plugs=True)
-    if new_plug:
-        pm.connectAttr(new_plug[0], old_data, force=True)
+def _set_plug_value(destination, value, attribute_type):
+    if attribute_type == "matrix":
+        if isinstance(value, (list, tuple)) and len(value) == 1:
+            value = value[0]
+        cmds.setAttr(destination, *value, type="matrix")
+    elif isinstance(value, str):
+        cmds.setAttr(destination, value, type="string")
+    elif isinstance(value, (list, tuple)):
+        if len(value) == 1 and isinstance(value[0], (list, tuple)):
+            value = value[0]
+        cmds.setAttr(destination, *value)
     else:
-        old_data.set(new_data.get())
-        
-    attr_list[p1_idx].unlock()
-    pm.removeMultiInstance(new_data, b=True)
-    old_data.lock(old_data_locked)
-    attr_list.lock(list_locked)
+        cmds.setAttr(destination, value)
 
 
-def _copy_swap(skin_proxy, skin_cluster_node, clone_pairing, originals, replacements):
-    name = skin_proxy.name().split(":")[-1]
-    message = f"Cloning {name} weights"
-    edit_progress_bar(status=message, progress=0, maxValue=len(originals))
-    
-    skin_cluster_node.normalizeWeights.set(0)
-    pm.skinCluster(skin_cluster_node, edit=True, addInfluence=replacements, weight=0.0)
-    
-    joint_indices = {}
-    for idx, matrix in enumerate(skin_cluster_node.matrix):
-        connections = pm.listConnections(matrix, source=True, plugs=False)
-        if not connections:
-            continue
+def _replace(source_index, destination_index, skin_cluster, attribute_name):
+    cluster_name = node_name(skin_cluster)
+    array_plug = "{}.{}".format(cluster_name, attribute_name)
+    source_plug = "{}[{}]".format(array_plug, source_index)
+    destination_plug = "{}[{}]".format(array_plug, destination_index)
+    array_locked = cmds.getAttr(array_plug, lock=True)
+    destination_locked = cmds.getAttr(destination_plug, lock=True)
+    cmds.setAttr(array_plug, lock=False)
+    cmds.setAttr(destination_plug, lock=False)
+    cmds.setAttr(source_plug, lock=False)
 
-        source_joint = connections[0]
-        if source_joint not in clone_pairing:
-            #this case shouldn't be posssible.
-            pm.warning(f"{source_joint.name()} isn't be replaced? That shouldn't be possible.")
-            continue
-        
-        joint_indices[source_joint] = matrix.index()
+    inputs = cmds.listConnections(
+        source_plug, source=True, destination=False, plugs=True
+    ) or []
+    if inputs:
+        cmds.connectAttr(inputs[0], destination_plug, force=True)
+    else:
+        _set_plug_value(
+            destination_plug,
+            cmds.getAttr(source_plug),
+            cmds.getAttr(source_plug, type=True),
+        )
+    cmds.removeMultiInstance(source_plug, b=True)
+    cmds.setAttr(destination_plug, lock=destination_locked)
+    cmds.setAttr(array_plug, lock=array_locked)
 
 
-    bind_pose_node = skin_cluster_node.bindPose.inputs(plugs=True, type='dagPose')
-    if bind_pose_node:
-        pm.disconnectAttr(bind_pose_node[0], skin_cluster_node.bindPose)
-        
-    for joint, idx in joint_indices.items():
-        edit_progress_bar(status=message, step=1)
-        if joint not in replacements:
-            continue
-        
-        p1 = joint
-        p1_idx = idx
-        p2 = clone_pairing[joint]
-        p2_idx = joint_indices[p2]
+def _influence_indices(skin_cluster):
+    cluster_name = node_name(skin_cluster)
+    result = {}
+    for index in cmds.getAttr(cluster_name + ".matrix", multiIndices=True) or []:
+        inputs = cmds.listConnections(
+            "{}.matrix[{}]".format(cluster_name, index),
+            source=True,
+            destination=False,
+        ) or []
+        if inputs:
+            result[Node(inputs[0])] = index
+    return result
 
-        _replace(p1, p1_idx, p2, p2_idx, skin_cluster_node, skin_cluster_node.bindPreMatrix)
-        _replace(p1, p1_idx, p2, p2_idx, skin_cluster_node, skin_cluster_node.matrix)
 
-        connections = pm.listConnections(p2, destination=True,
-                                         connections=True, plugs=True, sourceFirst=True, t='skinCluster',
-                                         skipConversionNodes=True)
+def _copy_swap(skin_proxy, skin_cluster, clone_pairing, originals, replacements):
+    cluster_name = node_name(skin_cluster)
+    edit_progress_bar(
+        status="Cloning {} weights".format(get_base_name(skin_proxy)),
+        progress=0,
+        maxValue=len(originals),
+    )
+    cmds.setAttr(cluster_name + ".normalizeWeights", 0)
+    cmds.skinCluster(
+        cluster_name,
+        edit=True,
+        addInfluence=mayautil.names(replacements),
+        weight=0.0,
+    )
+    indices = _influence_indices(skin_cluster)
 
-        for connection in connections:
-            source_plug = connection[0]
-            destination_plug = connection[1]
-            if destination_plug.node() != skin_cluster_node:
-                continue
-            #print(f"disconnecting: {source_plug} and {destination_plug}")
-            pm.disconnectAttr(source_plug, destination_plug)
+    bind_poses = cmds.listConnections(
+        cluster_name + ".bindPose",
+        source=True,
+        destination=False,
+        plugs=True,
+        type="dagPose",
+    ) or []
+    if bind_poses:
+        mayautil.disconnect(bind_poses[0], cluster_name + ".bindPose")
+
+    for original in originals:
+        edit_progress_bar(step=1)
+        replacement = clone_pairing[original]
+        # Vertex weights are keyed by the original influence's logical index.
+        # Keep that weighted index and replace its plugs with the proxy joint's
+        # plugs, then remove the temporary index created for the proxy.
+        _replace(indices[replacement], indices[original], skin_cluster, "bindPreMatrix")
+        _replace(indices[replacement], indices[original], skin_cluster, "matrix")
+
+        pairs = cmds.listConnections(
+            node_name(original),
+            source=False,
+            destination=True,
+            plugs=True,
+            connections=True,
+            type="skinCluster",
+            skipConversionNodes=True,
+        ) or []
+        for source_plug, destination_plug in zip(pairs[0::2], pairs[1::2]):
+            if destination_plug.split(".", 1)[0] == cluster_name:
+                mayautil.disconnect(source_plug, destination_plug)
 
     try:
-        bind_pose = pm.dagPose(skin_cluster_node.getInfluence(), save=True,
-                               bindPose=True, name=f'{skin_cluster_node.name()}_BindPose')
-        bind_pose.message >> skin_cluster_node.bindPose
-    except Exception as e:
-        print(e)
+        influences = cmds.skinCluster(cluster_name, query=True, influence=True) or []
+        bind_pose = cmds.dagPose(
+            influences,
+            save=True,
+            bindPose=True,
+            name=cluster_name.split("|")[-1] + "_BindPose",
+        )
+        cmds.connectAttr(bind_pose + ".message", cluster_name + ".bindPose", force=True)
+    except RuntimeError as error:
+        cmds.warning(str(error))
 
 
-def _copy_flood(skin_proxy, skin_cluster_node, clone_pairing, originals, replacements, vertices):
-    original_warnings_state = cmds.scriptEditorInfo(query=True, suppressWarnings=True)
-    cmds.scriptEditorInfo(suppressWarnings=True)
+def _copy_flood(skin_proxy, skin_cluster, clone_pairing, originals, replacements, vertices):
+    """Compatibility path; preserve weights by swapping influence plugs."""
+    _copy_swap(skin_proxy, skin_cluster, clone_pairing, originals, replacements)
 
-    name = skin_proxy.name().split(":")[-1]
-    message = f"Cloning {name} weights"
-    edit_progress_bar(status=message, progress=0, maxValue=len(originals))
 
-    try:
-        skin_cluster_node.normalizeWeights.set(1)
-        pm.skinCluster(skin_cluster_node, edit=True, addInfluence=replacements, weight=0.0)    
-
-        for idx, original in enumerate(originals):
-            replacement = replacements[idx]
-            pm.skinCluster(skin_cluster_node, edit=True, lockWeights=True, influence=original)
-            pm.skinCluster(skin_cluster_node, edit=True, lockWeights=True, influence=replacement)
-            
-        for idx, original in enumerate(originals):
-            replacement = replacements[idx]
-            pm.skinCluster(skin_cluster_node, edit=True, lockWeights=False, influence=original)
-            pm.skinCluster(skin_cluster_node, edit=True, lockWeights=False, influence=replacement)
-            pm.skinPercent(skin_cluster_node, vertices, transformValue=[(original, 0.0), (replacement, 1.0)], zeroRemainingInfluences=False, normalize=True)
-            pm.skinCluster(skin_cluster_node, edit=True, lockWeights=True, influence=original)
-            pm.skinCluster(skin_cluster_node, edit=True, lockWeights=True, influence=replacement)
-            
-            edit_progress_bar(status=message, step=1)
-    except Exception as e:
-        raise e
-    finally:
-        cmds.scriptEditorInfo(suppressWarnings=original_warnings_state)
-        
-
-def _copy_per_vert(skin_proxy, skin_cluster_node, clone_pairing, originals, replacements):
-    skin_cluster_node.normalizeWeights.set(2)
-    pm.skinCluster(skin_cluster_node, edit=True, addInfluence=replacements, weight=0.0)
-    
-    #make sure the original joints are unlocked
-    for og in originals:
-        pm.skinCluster(skin_cluster_node, edit=True, lockWeights=False, influence=og)
-
-    joint_to_idx = {element.inputs()[0]: element.index() for element in skin_cluster_node.matrix}
-    oldIdx_to_newIdx = {joint_to_idx[og]: joint_to_idx[clone_pairing[og]] for og in originals}
-
-    step_size = int(skin_cluster_node.wl.numElements() / 100)
-    if step_size < 1:
-        step_size = 1
-    total_steps = int(skin_cluster_node.wl.numElements() / step_size)
-
-    name = skin_proxy.name().split(":")[-1]
-    message = f"Cloning {name} weights"
-    edit_progress_bar(status=message, progress=0, maxValue=total_steps)
-
-    for idx, vert_weights_entries in enumerate(skin_cluster_node.wl):
-        if idx and idx % step_size == 0:
-            edit_progress_bar(step=1)
-
-        vert_weights = vert_weights_entries.weights #vert_weights.index() returns the vertex number
-        new_weights = {}
-
-        for vert_weight in vert_weights:
-            joint_idx = vert_weight.index()
-            joint_influence = vert_weight.get()
-
-            vert_weight.set(0.0)
-            if joint_idx not in oldIdx_to_newIdx:
-                continue
-
-            #define the new weight values and clear the old ones.
-            new_weights[oldIdx_to_newIdx[joint_idx]] = joint_influence
-
-        for joint_idx, value in new_weights.items():
-            weight_entry = vert_weights.elementByLogicalIndex(joint_idx)
-            weight_entry.set(value)
+def _copy_per_vert(skin_proxy, skin_cluster, clone_pairing, originals, replacements):
+    """Compatibility path; preserve weights by swapping influence plugs."""
+    _copy_swap(skin_proxy, skin_cluster, clone_pairing, originals, replacements)
 
 
 def _clone_meshes(meshes, mesh_parent, skinned_parent, clone_pairing):
     mesh_cluster_mapping = common.get_mesh_cluster_mappings()
-
     copy_method = preferences.CopyWeightType.SWAP
-    print(f"Cloning weights via {copy_method} method.")
+    print("Cloning weights via {} method.".format(copy_method))
 
     for mesh_count, source_shape in enumerate(meshes):
-        message = f"Making proxy of {source_shape.name()}"
+        message = "Making proxy of {}".format(source_shape.name())
         edit_progress_bar(status=message, progress=mesh_count, maxValue=len(meshes))
-        pm.displayInfo(message)
+        om.MGlobal.displayInfo(message)
 
-        base_name = get_base_name(source_shape.getParent())
-        name = f"{CLONE_PREFIX}:{base_name}"
-        mesh_proxy = pm.duplicate(source_shape, name=name)[0]
-
-        _Unhide_primary_attrs(mesh_proxy)
-        pm.makeIdentity(mesh_proxy.fullPathName(), apply=True, t=True, r=True, s=True, n=False, pn=True)
-        pm.parent(mesh_proxy.fullPathName(), world=True)
-        pm.makeIdentity(mesh_proxy.fullPathName(), apply=True, t=True, r=True, s=True, n=False, pn=True)
-        pm.delete(mesh_proxy.fullPathName(), constructionHistory=True)
+        name = "{}:{}".format(CLONE_PREFIX, get_base_name(mayautil.parent(source_shape)))
+        mesh_proxy = Node(cmds.duplicate(node_name(source_shape), name=name)[0])
+        _unhide_primary_attrs(mesh_proxy)
+        cmds.makeIdentity(mesh_proxy.name(), apply=True, t=True, r=True, s=True, n=False, pn=True)
+        if mayautil.parent(mesh_proxy) is not None:
+            cmds.parent(mesh_proxy.name(), world=True)
+        cmds.makeIdentity(mesh_proxy.name(), apply=True, t=True, r=True, s=True, n=False, pn=True)
+        cmds.delete(mesh_proxy.name(), constructionHistory=True)
         _map_proxy(source_shape, mesh_proxy, clone_pairing)
 
-        if source_shape not in mesh_cluster_mapping:
-            mesh_proxy.setParent(mesh_parent)
+        source_clusters = mesh_cluster_mapping.get(source_shape)
+        if not source_clusters:
+            cmds.parent(mesh_proxy.name(), node_name(mesh_parent))
             continue
-        else:
-            mesh_proxy.setParent(skinned_parent)
-            
-            for cluster in mesh_cluster_mapping[source_shape]:
-                mi = pm.animation.skinCluster(cluster, maximumInfluences=True, query=True)
-                influences = pm.animation.skinCluster(cluster, influence=True, query=True)
+        cmds.parent(mesh_proxy.name(), node_name(skinned_parent))
 
-                if int(cmds.about(version=True)) > 2023:
-                    cloned_cluster = pm.animation.skinCluster(*influences, mesh_proxy, mi=mi, multi=True, tsb=True)
-                else:
-                    cloned_cluster = pm.animation.skinCluster(*influences, mesh_proxy, mi=mi, tsb=True)
-                    
-                pm.copySkinWeights(ss=cluster, ds=cloned_cluster, noMirror=True,
-                                   surfaceAssociation='closestPoint', influenceAssociation='closestJoint')
-                
-                pm.select(mesh_proxy, replace=True)
-                pm.animation.skinCluster(mesh_proxy, edit=True, rui=True) #remove unused influences
-                pm.animation.skinCluster(cloned_cluster, edit=True, obeyMaxInfluences=False)
-            
-                originals = cloned_cluster.getInfluence()
-                replacements = [clone_pairing[i] for i in originals]
-                skinned_geometry = cloned_cluster.getGeometry()[0]
-                vertices = skinned_geometry.vtx[:]
-                prune = False
-                remove_originals = True
-                
-                #don't use match case here due to not working with Maya 2023
-                if copy_method == preferences.CopyWeightType.SWAP: #Mazu: 19.8838, Waitress: 4.5856,
-                    remove_originals = False
-                    _copy_swap(mesh_proxy, cloned_cluster, clone_pairing, originals, replacements)
+        for cluster in source_clusters:
+            cluster_name = node_name(cluster)
+            max_influences = cmds.skinCluster(
+                cluster_name, maximumInfluences=True, query=True
+            )
+            influences = nodes(
+                cmds.skinCluster(cluster_name, influence=True, query=True) or []
+            )
+            arguments = mayautil.names(influences) + [mesh_proxy.name()]
+            kwargs = {
+                "maximumInfluences": max_influences,
+                "toSelectedBones": True,
+            }
+            if int(cmds.about(version=True)) > 2023:
+                kwargs["multi"] = True
+            cloned_cluster = Node(cmds.skinCluster(*arguments, **kwargs)[0])
+            cmds.copySkinWeights(
+                sourceSkin=cluster_name,
+                destinationSkin=cloned_cluster.name(),
+                noMirror=True,
+                surfaceAssociation="closestPoint",
+                influenceAssociation="closestJoint",
+            )
+            cmds.skinCluster(mesh_proxy.name(), edit=True, removeUnusedInfluence=True)
+            cmds.skinCluster(
+                cloned_cluster.name(), edit=True, obeyMaxInfluences=False
+            )
 
-                elif copy_method == preferences.CopyWeightType.FLOOD: #Mazu: 158.3618, Waitress: 18.1239,
-                    prune = True
-                    _copy_flood(mesh_proxy, cloned_cluster, clone_pairing, originals, replacements, vertices)
-        
-                elif copy_method == preferences.CopyWeightType.PER_VERT: #Mazu: 138.2624, Waitress: 70.3756,
-                    _copy_per_vert(mesh_proxy, cloned_cluster, clone_pairing, originals, replacements)                
+            originals = nodes(
+                cmds.skinCluster(
+                    cloned_cluster.name(), query=True, influence=True
+                )
+                or []
+            )
+            replacements = [clone_pairing[influence] for influence in originals]
+            _copy_swap(
+                mesh_proxy,
+                cloned_cluster,
+                clone_pairing,
+                originals,
+                replacements,
+            )
+            cmds.setAttr(cloned_cluster.name() + ".normalizeWeights", 2)
+            for influence in cmds.skinCluster(
+                cloned_cluster.name(), query=True, influence=True
+            ) or []:
+                cmds.skinCluster(
+                    cloned_cluster.name(),
+                    edit=True,
+                    lockWeights=False,
+                    influence=influence,
+                )
+            cmds.setAttr(cloned_cluster.name() + ".normalizeWeights", 1)
+            cmds.skinCluster(
+                cloned_cluster.name(), edit=True, forceNormalizeWeights=True
+            )
 
 
-                cloned_cluster.normalizeWeights.set(2)
-                if remove_originals:
-                    for original in originals:
-                        pm.skinCluster(cloned_cluster, edit=True, removeInfluence=original)
-
-                for influence in cloned_cluster.getInfluence():
-                    pm.skinCluster(cloned_cluster, edit=True, lockWeights=False, influence=influence)
-
-                cloned_cluster.normalizeWeights.set(1)
-                if prune:
-                    pm.animation.skinPercent(cloned_cluster, vertices, pruneWeights=0.005)
-                else:
-                    pm.animation.skinCluster(cloned_cluster, forceNormalizeWeights=True, edit=True)
-
-      
-      
-
-def create_export_set(name='', auto_add_selected=False) -> pm.nodetypes.ObjectSet:
+def create_export_set(name="", auto_add_selected=False):
     if not name:
-        data_name, ok = QInputDialog.getText(None, "New Node Name", 'Name this data')
+        data_name, ok = QInputDialog.getText(None, "New Node Name", "Name this data")
         if not ok:
             return None
-        
-        name = f'{data_name}_CSC_EXPORT'
-    
-    selection = pm.ls(sl=True)
-    filtered_selection = pm.ls(sl=True,type=['transform','joint', 'skinCluster', 'mesh'])
-    new_node, data = CascExportData.create_node(nodeType = 'objectSet')
+        name = "{}_CSC_EXPORT".format(data_name)
 
-    pm.rename(new_node, name)
-    pm.select(selection, replace=True)
-    
-    if filtered_selection:
-        if auto_add_selected:
-            answer = QMessageBox.StandardButton.Yes
-        else:
-            answer =  QMessageBox.question(cg3dguru.ui.Window.mayaWindow, 'Add', 'Add the current selection?')
-            
+    selection = mayautil.ls(selection=True, long=True)
+    filtered = mayautil.ls(
+        selection=True,
+        type=["transform", "joint", "skinCluster", "mesh"],
+        long=True,
+    )
+    new_node, _ = CascExportData.create_node(nodeType="objectSet")
+    new_node = mayautil.rename(new_node, name)
+    if selection:
+        cmds.select(mayautil.names(selection), replace=True)
+    else:
+        cmds.select(clear=True)
+
+    if filtered:
+        answer = (
+            QMessageBox.StandardButton.Yes
+            if auto_add_selected
+            else QMessageBox.question(
+                cg3dguru.ui.Window.mayaWindow,
+                "Add",
+                "Add the current selection?",
+            )
+        )
         if answer == QMessageBox.StandardButton.Yes:
-            new_node.addMembers(filtered_selection)
-            
+            mayautil.add_set_members(new_node, filtered)
     return new_node
-
 
 
 @wait_cursor
 def convert_textures():
-    #https://help.autodesk.com/view/MAYAUL/2024/ENU/?guid=MAYA_API_REF_cpp_ref_class_m_qt_util_html
-    #https://stackoverflow.com/questions/72801366/maya-python-get-the-widget-containing-the-renderd-image-from-mayas-render-view
-
-    roots = {item.getParent(-1) for item in pm.ls(sl=True)}
-    branches = pm.listRelatives(list(roots), allDescendents=True)
-    textures = materials.get_textures(branches)
-    
-    valid_extensions = {'.jpg', '.jpeg', '.png'}
-    for key, textures in textures.items():
-        for texture in textures:
-            tpath = Path(texture)
-            if tpath.suffix.lower() not in valid_extensions:
-                try:         
-                    pp = omui.MQtUtil.createPixmap(tpath)
-                    pmap = wrapInstance( int(pp), QPixmap)
-                    image = pmap.toImage()
-                    save_name = tpath.with_suffix('.png')
-                    image.save(str(save_name))
-                except Exception as e:
-                    print(e)
-    
+    roots = {mayautil.top_parent(item) for item in mayautil.ls(selection=True, long=True)}
+    textures = materials.get_textures(mayautil.descendants(roots))
+    for texture_paths in textures.values():
+        for texture in texture_paths:
+            texture_path = Path(texture)
+            if texture_path.suffix.lower() in materials.SUPPORTED_TEXTURE_EXTENSIONS:
+                continue
+            materials.convert_texture(texture_path)
 
 
 @wait_cursor
 def _derig_selection():
-    selection = pm.ls(sl=True)
+    selection = mayautil.ls(selection=True, long=True)
     if not selection:
         return False
-
-    start_progress_bar(status='Creating Proxy', maxValue=100)
-
-    results = common.get_skinned_data_sets(selection)
-    common.update_skinned_data_sets(*results)
-    joints, meshes, skin_clusters, transforms = results
-    
+    start_progress_bar(status="Creating Proxy", maxValue=100)
+    joints, meshes, skin_clusters, transforms = common.get_skinned_data_sets(selection)
+    common.update_skinned_data_sets(joints, meshes, skin_clusters, transforms)
     if not joints and not meshes and not skin_clusters:
-        pm.error("No joints or meshes to convert to a proxy.")
-        return
+        cmds.error("No joints or meshes to convert to a proxy.")
 
-    joint_hierarchy = _solve_joint_hierarchy(joints)
-
+    hierarchy = _solve_joint_hierarchy(joints)
     clone_pairing = {}
-    root = pm.general.createNode('transform', name=f"{CLONE_PREFIX}:root")
-    data = ProxyRoot.add_data(root)
-    data.rootType.set(0)
-
-    skeleton_root = pm.general.createNode('transform', name=f"{CLONE_PREFIX}:skel_root", parent=root)
+    root = Node(cmds.createNode("transform", name="{}:root".format(CLONE_PREFIX)))
+    ProxyRoot.add_data(root).rootType.set(0)
+    skeleton_root = Node(
+        cmds.createNode(
+            "transform",
+            name="{}:skel_root".format(CLONE_PREFIX),
+            parent=root.name(),
+        )
+    )
     ProxyRoot.add_data(skeleton_root).rootType.set(1)
+    _clone_joints(hierarchy.get(None, []), skeleton_root, hierarchy, clone_pairing)
 
-    _clone_joints(joint_hierarchy[None], skeleton_root, joint_hierarchy, clone_pairing)
-    
-    cloned_root_joints = [clone_pairing[joint] for joint in joint_hierarchy[None]]
-    pm.general.select(cloned_root_joints, replace=True)
-    pm.general.makeIdentity(apply=True, t=0, r=1, s=0, n=0)
-    
-    meshes_root = pm.general.createNode('transform', name = f"{CLONE_PREFIX}:meshes", parent=root)
+    cloned_roots = [clone_pairing[joint] for joint in hierarchy.get(None, [])]
+    if cloned_roots:
+        cmds.makeIdentity(
+            mayautil.names(cloned_roots), apply=True, translate=False, rotate=True, scale=False
+        )
+    meshes_root = Node(
+        cmds.createNode(
+            "transform", name="{}:meshes".format(CLONE_PREFIX), parent=root.name()
+        )
+    )
     ProxyRoot.add_data(meshes_root).rootType.set(2)
-    
-    skinned_meshes_root = pm.general.createNode('transform', name = f"{CLONE_PREFIX}:skinned_meshes", parent=root)
-    ProxyRoot.add_data(skinned_meshes_root).rootType.set(3)
-    skinned_meshes_root.inheritsTransform.set(0)
+    skinned_root = Node(
+        cmds.createNode(
+            "transform",
+            name="{}:skinned_meshes".format(CLONE_PREFIX),
+            parent=root.name(),
+        )
+    )
+    ProxyRoot.add_data(skinned_root).rootType.set(3)
+    cmds.setAttr(skinned_root.name() + ".inheritsTransform", False)
 
     start_time = time.perf_counter()
-    _clone_meshes(meshes, meshes_root, skinned_meshes_root, clone_pairing)
-    end_time = time.perf_counter()
-    elapsed_time = end_time - start_time
-    print(f"The function took {elapsed_time:.4f} seconds to run.")
-    #waitress 76.3239 second with manual weight copy
-    
-    null_children = [child for child in root.getChildren() if not child.getChildren()]
-    if null_children:
-        pm.general.delete(null_children)
-  
-    constraints = [child for child in pm.listRelatives(root, allDescendents=True, type="transform") if isinstance(child, pm.nodetypes.Constraint)]
+    _clone_meshes(meshes, meshes_root, skinned_root, clone_pairing)
+    print("Proxy creation took {:.4f} seconds.".format(time.perf_counter() - start_time))
+
+    empty_children = [
+        child
+        for child in mayautil.children(root)
+        if not mayautil.children(child)
+    ]
+    if empty_children:
+        cmds.delete(mayautil.names(empty_children))
+    constraints = [
+        child
+        for child in mayautil.descendants([root])
+        if cmds.objectType(child.name(), isAType="constraint")
+    ]
     if constraints:
-        pm.general.delete(constraints) 
-    
-    pm.select(root, replace=True)
+        cmds.delete(mayautil.names(constraints))
+    cmds.select(root.name(), replace=True)
     return True
 
 
 def constrain_proxy():
-    import cg3dguru.udata
-
     data_nodes = cg3dguru.udata.Utils.get_nodes_with_data(data_class=ProxyRoot)
-    joint_roots = [joint_root for joint_root in data_nodes if joint_root.rootType.get() == 1]
-    
-    joint_root = None
-    proxy_joints = []
+    joint_roots = [data for data in data_nodes if data.rootType.get() == 1]
     if not joint_roots:
-        pm.error("No proxy data found.")
-        return
-    
-    elif len(joint_roots) > 2:
-        #We have multiple proxies in the scene, so we need to do some extra work to find the right proxy
-        export_nodes = common.get_export_nodes()
-        pm.warning("add support for finding one of many proxy rigs")
-
-    else:
-        joint_root = joint_roots[0]
-        
-
+        cmds.error("No proxy data found.")
+    if len(joint_roots) > 1:
+        cmds.warning("Multiple proxy rigs found; using the first one.")
     maintain_offset = preferences.get().derig_maintain_offset
-    proxy_data = cg3dguru.udata.Utils.get_nodes_with_data(pm.listRelatives(joint_roots, allDescendents =True), data_class=ProxyData)
-    for proxy in proxy_data:
-        source = proxy.proxySource.get()
-        if source:
-            pm.parentConstraint(source, proxy, maintainOffset=maintain_offset)
-            
-                       
-def sync_casc_id():
-    selected_export_sets = common.get_selected_export_nodes()
-    success, casc_ids = server.send_and_listen("cg3dmaya.get_selected_ids()")
-    
-    if not success:
-        pm.displayError("Couldn't establish communication with Cascadeur")
-        return
-    
-    if len(selected_export_sets) != 1 or len(casc_ids) != 1:
-        pm.displayError("Select exactly one export set in Maya and Cascadeur")
-        return
-    
-    title = 'Cascadeur Bridge'
-    message = "Warning: Syncing IDs should only be done if you understand the risks.\nSee documentation for more details.\nContinue?"
-    
-    result = pm.confirmDialog(
-        title=title,
-        message=message,
-        button=['Yes', 'Cancel'],
-        defaultButton='Yes',
-        cancelButton='Cancel',
-        dismissString='Closed'
+    descendants = mayautil.descendants([joint_roots[0]])
+    proxy_data = cg3dguru.udata.Utils.get_nodes_with_data(
+        descendants, data_class=ProxyData
     )
+    for proxy in proxy_data:
+        sources = proxy.proxySource.inputs()
+        if sources:
+            cmds.parentConstraint(
+                sources[0].name(),
+                proxy.name(),
+                maintainOffset=maintain_offset,
+            )
 
-    if result == 'Yes':
-        data_prop = selected_export_sets[0].cscDataId
-        data_prop.unlock()
-        data_prop.set(casc_ids[0])
-        data_prop.lock()
-        pm.displayInfo("ID Synced")  
+
+def sync_casc_id():
+    selected_sets = common.get_selected_export_nodes()
+    success, casc_ids = server.send_and_listen("cg3dmaya.get_selected_ids()")
+    if not success:
+        cmds.error("Couldn't establish communication with Cascadeur")
+    if len(selected_sets) != 1 or len(casc_ids) != 1:
+        cmds.error("Select exactly one export set in Maya and Cascadeur")
+    result = cmds.confirmDialog(
+        title="Cascadeur Bridge",
+        message=(
+            "Warning: Syncing IDs should only be done if you understand the risks.\n"
+            "See documentation for more details.\nContinue?"
+        ),
+        button=["Yes", "Cancel"],
+        defaultButton="Yes",
+        cancelButton="Cancel",
+        dismissString="Cancel",
+    )
+    if result == "Yes":
+        identifier = selected_sets[0].cscDataId
+        identifier.unlock()
+        identifier.set(casc_ids[0])
+        identifier.lock()
+        om.MGlobal.displayInfo("ID Synced")
 
 
 def derig_selection():
-    selection = pm.ls(sl=True)
-    if not selection:
-        pm.warning("Please select meshes and/or joints for cloning")
+    if not cmds.ls(selection=True):
+        cmds.warning("Please select meshes and/or joints for cloning")
         return
-    
-    data_name, ok = QInputDialog.getText(None, "Name this character", 'Unique namespace')
+    data_name, ok = QInputDialog.getText(None, "Name this character", "Unique namespace")
     if not ok:
-        return None    
-    
+        return None
     global CLONE_PREFIX
     CLONE_PREFIX = data_name
-    
     if _derig_selection():
-        name = f"{CLONE_PREFIX}:{CLONE_PREFIX}_CSC_EXPORT"
-        create_export_set(name, auto_add_selected=True)
-        
+        create_export_set(
+            "{}:{}_CSC_EXPORT".format(CLONE_PREFIX, CLONE_PREFIX),
+            auto_add_selected=True,
+        )
+
 
 def hik_def_from_proxy():
-    def _get_connected_attr_name(source_node, destination_node_name):
-        try:
-            source_attr = source_node.Character
-        except AttributeError:
+    def connected_hik_attribute(source_node, destination_node):
+        source_plug = source_node.name() + ".Character"
+        if not cmds.objExists(source_plug):
             return None
-    
-        # List connections from the source attribute, getting the destination plugs (c=True, d=True, s=False)
-        # The 'connections' (c) flag returns a 2D array of attribute pairs [sourceAttr, destinationAttr]
-        connections = pm.listConnections(source_attr, connections=True, destination=True, source=False, plugs=True)
-    
-        if connections:
-            # connections is a list of [source, destination] pairs.
-            # We look through the destination plugs to find the one belonging to our destination node.
-            for source_plug, dest_plug in connections:
-                if dest_plug.nodeName() == destination_node_name:
-                    # Return just the attribute name (e.g., 'customAttr')
-                    return dest_plug.attrName()
-    
-        return None    
+        pairs = cmds.listConnections(
+            source_plug,
+            connections=True,
+            destination=True,
+            source=False,
+            plugs=True,
+        ) or []
+        for _, destination in zip(pairs[0::2], pairs[1::2]):
+            node, attribute = destination.split(".", 1)
+            if node == destination_node:
+                return attribute
+        return None
 
-    active_character_name = hik.get_current_character()
-    if active_character_name == 'None':
-        pm.warning("Please select a character from the HIK window. Creation Skipped.")
+    active_character = hik.get_current_character()
+    if active_character == "None":
+        cmds.warning("Please select a character from the HIK window.")
         return
-    
-    active_character_name = active_character_name.split("(")[0] #remove any potential "(custom rig)" suffix
-    node_index = hik.get_node_index_mapping()
-    all_joints = pm.ls(type='joint')
-    proxy_data = cg3dguru.udata.Utils.get_nodes_with_data(all_joints, data_class=ProxyData)
-
+    active_character = active_character.split("(")[0]
+    node_indices = hik.get_node_index_mapping()
+    proxy_data = cg3dguru.udata.Utils.get_nodes_with_data(
+        mayautil.ls(type="joint"), data_class=ProxyData
+    )
     if not proxy_data:
-        pm.warning("Couldn't find any proxy joints! Creation Skipped.")
+        cmds.warning("Couldn't find any proxy joints.")
         return
 
-    source_joint_idx = {}
+    source_indices = {}
     for proxy in proxy_data:
-        source_joint = proxy.proxySource.get()
-        if not source_joint:
+        sources = proxy.proxySource.inputs()
+        if not sources:
             continue
-
-        attr_name = _get_connected_attr_name(proxy, active_character_name)
-        if not attr_name or attr_name not in node_index:
-            continue
-
-        source_joint_idx[source_joint.name()] = node_index[attr_name]
-
-    if not source_joint_idx:
-        pm.warning("Couldn't find any proxy joints from the active HIK Character. Creation Skipped.")
+        attribute = connected_hik_attribute(proxy, active_character)
+        if attribute in node_indices:
+            source_indices[sources[0].name()] = node_indices[attribute]
+    if not source_indices:
+        cmds.warning("Couldn't find proxy joints from the active HIK character.")
         return
-        
-    current_characters = set(pm.ls(type='HIKCharacterNode'))
-    pm.mel.eval('hikCreateDefinition')
-    new_characters = [i for i in pm.ls(type='HIKCharacterNode') if i not in current_characters]
+
+    current_characters = set(cmds.ls(type="HIKCharacterNode") or [])
+    mel.eval("hikCreateDefinition")
+    new_characters = [
+        node
+        for node in (cmds.ls(type="HIKCharacterNode") or [])
+        if node not in current_characters
+    ]
     if len(new_characters) != 1:
-        pm.error("Failed to creat new Character definition.")
-        return
-    
-    target_def = new_characters[0]
-    target_name = target_def.name()
-
-    for joint_name, idx in source_joint_idx.items():
-        mel_cmd = f'setCharacterObject("{joint_name}", "{target_name}", {idx}, 0)'
-        pm.mel.eval(mel_cmd)
-        
-    if pm.mel.eval('workspaceControl -query -raise hikCharacterControlsDock') != 1:
-        pm.mel.eval("hikToggleWidget")
-
+        cmds.error("Failed to create a new character definition.")
+    target = new_characters[0]
+    for joint_name, index in source_indices.items():
+        mel.eval('setCharacterObject("{}", "{}", {}, 0)'.format(joint_name, target, index))
+    if mel.eval("workspaceControl -query -raise hikCharacterControlsDock") != 1:
+        mel.eval("hikToggleWidget")

@@ -1,5 +1,9 @@
-import pymel.core as pm
 from enum import Enum
+import json
+
+from maya import cmds, mel
+
+from cg3dguru.maya import Node, node_name
 
 
 _node_index = {}
@@ -13,23 +17,21 @@ class SourceType(Enum):
     
 def load_hik():
     try:
-        pm.mel.eval('if (!`pluginInfo -q -l "mayaHIK"`){ loadPlugin "mayaHIK"; } if (!`pluginInfo -q -l "mayaCharacterization"`) { loadPlugin "mayaCharacterization"; } if (!`pluginInfo -q -l "OneClick"`){ loadPlugin "OneClick"; } hikToggleWidget();')
-    except:
+        mel.eval('if (!`pluginInfo -q -l "mayaHIK"`){ loadPlugin "mayaHIK"; } if (!`pluginInfo -q -l "mayaCharacterization"`) { loadPlugin "mayaCharacterization"; } if (!`pluginInfo -q -l "OneClick"`){ loadPlugin "OneClick"; } hikToggleWidget();')
+    except RuntimeError:
         pass
     
     
 def _get_hik_windows():
     load_hik()
-    #pm.mel.eval('if (!`pluginInfo -q -l "mayaHIK"`){ loadPlugin "mayaHIK"; } if (!`pluginInfo -q -l "mayaCharacterization"`) { loadPlugin "mayaCharacterization"; } if (!`pluginInfo -q -l "OneClick"`){ loadPlugin "OneClick"; } hikToggleWidget();')
-
-    hik_options = pm.lsUI(l=True, type="optionMenuGrp")
+    hik_options = cmds.lsUI(long=True, type="optionMenuGrp") or []
     character_list = None
     source_list = None
     
     for window in hik_options:
-        if 'hikCharacterList' in window.name():
+        if 'hikCharacterList' in window:
             character_list = window
-        elif 'hikSourceList' in window.name():
+        elif 'hikSourceList' in window:
             source_list = window
             
     return (character_list, source_list)
@@ -38,17 +40,19 @@ def _get_hik_windows():
 def _get_character_name(character):
     if isinstance(character, str):
         return character
-    elif isinstance(character, pm.nodetypes.HIKCharacterNode):
-        return character.name()
+    elif isinstance(character, Node):
+        if cmds.nodeType(character.name()) == "HIKCharacterNode":
+            return character.name()
+        cmds.error("Can't get character name from: {}".format(character))
     elif character is None:
         return 'None'
     else:
-        pm.error("Can't get character name from: {}".format(character))
+        cmds.error("Can't get character name from: {}".format(character))
         
 
 def _set_list(list_control, value, update_method_name):
-    menu_items = pm.optionMenuGrp(list_control, q=True, itemListLong=True)
-    menu_items_names = {pm.menuItem(menu_item, q=True, label=True).lower().strip(): menu_item
+    menu_items = cmds.optionMenuGrp(list_control, query=True, itemListLong=True) or []
+    menu_items_names = {cmds.menuItem(menu_item, query=True, label=True).lower().strip(): menu_item
                         for menu_item in menu_items}
     value = value.lower().strip()
     
@@ -68,23 +72,23 @@ def _set_list(list_control, value, update_method_name):
         elif matches > 1:
             raise KeyError(f"HIK: Too many options match {value}")
 
-    value = pm.menuItem(menu_item, q=True, label=True)
+    value = cmds.menuItem(menu_item, query=True, label=True)
 
-    pm.optionMenuGrp(list_control, edit=True, value=value)
-    pm.mel.eval(update_method_name)
-    pm.mel.eval('hikUpdateContextualUI()')
+    cmds.optionMenuGrp(list_control, edit=True, value=value)
+    mel.eval(update_method_name)
+    mel.eval('hikUpdateContextualUI()')
         
         
 def get_current_character():
     """Returns the name of the active hik character"""
     character_list, source_list = _get_hik_windows()
-    return pm.optionMenuGrp(character_list, query=True, value=True)
+    return cmds.optionMenuGrp(character_list, query=True, value=True)
 
 
 def get_current_source():
     """Returns the name of the active hik source"""
     character_list, source_list = _get_hik_windows()
-    source = pm.optionMenuGrp(source_list, query=True, value=True)
+    source = cmds.optionMenuGrp(source_list, query=True, value=True)
     
     if source == ' None':
         return SourceType.NONE
@@ -101,12 +105,12 @@ def get_character_source(character):
     character_list, source_list = _get_hik_windows()        
     character_name = _get_character_name(character)    
 
-    current_character = pm.optionMenuGrp(character_list, query=True, value=True)
+    current_character = cmds.optionMenuGrp(character_list, query=True, value=True)
     if current_character != character_name:
         _set_list(character_list, character_name, 'hikUpdateCurrentCharacterFromUI()')
 
         
-    return pm.optionMenuGrp(source_list, query=True, value=True)
+    return cmds.optionMenuGrp(source_list, query=True, value=True)
 
 
 def set_character(character):
@@ -114,17 +118,35 @@ def set_character(character):
     character_list, source_list = _get_hik_windows()        
     character_name = _get_character_name(character)
 
-    current_character = pm.optionMenuGrp(character_list, query=True, value=True)
+    current_character = cmds.optionMenuGrp(character_list, query=True, value=True)
     if current_character != character_name:
         _set_list(character_list, character_name, 'hikUpdateCurrentCharacterFromUI()')
 
 
 def set_character_source(character, source: SourceType):
     """Set the HIK UI to a specific character and source"""
-    character_list, source_list = _get_hik_windows()        
     character_name = _get_character_name(character)
 
-    current_character = pm.optionMenuGrp(character_list, query=True, value=True)
+    # Animation FBX import must be able to disable the exact matched
+    # character even when the HIK window is closed (or unavailable in
+    # mayapy). Driving the character through the UI menu made the import
+    # depend on display labels and failed before FBXImport was reached.
+    if source == SourceType.NONE:
+        load_hik()
+        quoted_name = json.dumps(character_name)
+        mel.eval(
+            'hikSetCurrentCharacter({0}); '
+            'hikSetCurrentSource(hikNoneString()); '
+            'hikEnableCharacter({0}, 2);'.format(quoted_name)
+        )
+        try:
+            mel.eval('hikUpdateSourceList(); hikUpdateContextualUI();')
+        except RuntimeError:
+            pass
+        return
+
+    character_list, source_list = _get_hik_windows()
+    current_character = cmds.optionMenuGrp(character_list, query=True, value=True)
     if current_character != character_name:
         _set_list(character_list, character_name, 'hikUpdateCurrentCharacterFromUI()')
 
@@ -141,10 +163,10 @@ def set_character_source(character, source: SourceType):
         if not source_name.startswith(' '):
             source_name = ' {}'.format(source_name)
     else:
-        pm.error('invalid source type: {}'.format(source))
+        cmds.error('invalid source type: {}'.format(source))
         
     if character and source_list:
-        current_source = pm.optionMenuGrp(source_list, query=True, value=True)
+        current_source = cmds.optionMenuGrp(source_list, query=True, value=True)
         if current_source != source_name:
             _set_list(source_list, source_name, 'hikUpdateCurrentSourceFromUI()')
             
@@ -154,7 +176,7 @@ def get_node_index_mapping():
     global _node_index
     if not _node_index:
         for idx in range(0, 250): #right now HIK goes to 211
-            name = pm.mel.eval(f'GetHIKNodeName {idx}')
+            name = mel.eval(f'GetHIKNodeName {idx}')
             if name:
                 _node_index[name] = idx
                 

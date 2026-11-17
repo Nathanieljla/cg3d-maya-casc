@@ -321,6 +321,49 @@ TWIST_AXES = {
 }
 
 
+# Cascadeur's QRT writer emits one twist section per source bone. Section
+# labels repeat because the upper/lower limb distinction is carried by each
+# entry's Bone name (arm_l vs forearm_l, thigh_l vs calf_l, and so on).
+TWIST_SECTIONS = (
+    ('Left arm', (
+        'LeafLeftArmRoll1', 'LeafLeftArmRoll2', 'LeafLeftArmRoll3',
+        'LeafLeftArmRoll4', 'LeafLeftArmRoll5',
+    )),
+    ('Left arm', (
+        'LeafLeftForeArmRoll1', 'LeafLeftForeArmRoll2',
+        'LeafLeftForeArmRoll3', 'LeafLeftForeArmRoll4',
+        'LeafLeftForeArmRoll5',
+    )),
+    ('Right arm', (
+        'LeafRightArmRoll1', 'LeafRightArmRoll2', 'LeafRightArmRoll3',
+        'LeafRightArmRoll4', 'LeafRightArmRoll5',
+    )),
+    ('Right arm', (
+        'LeafRightForeArmRoll1', 'LeafRightForeArmRoll2',
+        'LeafRightForeArmRoll3', 'LeafRightForeArmRoll4',
+        'LeafRightForeArmRoll5',
+    )),
+    ('Left leg', (
+        'LeafLeftUpLegRoll1', 'LeafLeftUpLegRoll2',
+        'LeafLeftUpLegRoll3', 'LeafLeftUpLegRoll4',
+        'LeafLeftUpLegRoll5',
+    )),
+    ('Left leg', (
+        'LeafLeftLegRoll1', 'LeafLeftLegRoll2', 'LeafLeftLegRoll3',
+        'LeafLeftLegRoll4', 'LeafLeftLegRoll5',
+    )),
+    ('Right leg', (
+        'LeafRightUpLegRoll1', 'LeafRightUpLegRoll2',
+        'LeafRightUpLegRoll3', 'LeafRightUpLegRoll4',
+        'LeafRightUpLegRoll5',
+    )),
+    ('Right leg', (
+        'LeafRightLegRoll1', 'LeafRightLegRoll2', 'LeafRightLegRoll3',
+        'LeafRightLegRoll4', 'LeafRightLegRoll5',
+    )),
+)
+
+
 _ACTIVE_CHARACTER_NODE = None
 _ACTIVE_USER_DATA = None
 
@@ -328,7 +371,11 @@ _ACTIVE_USER_DATA = None
 def _get_list_of_parents(transform, input_list):
     parent = transform.getParent()
     if parent is not None:
-        input_list.append(parent.name())
+        # QRT stores a joint hierarchy, not Maya's surrounding transform
+        # containers. Full DAG paths and non-joint proxy groups make some
+        # current Cascadeur parsers stop resolving entries partway through.
+        if parent.type() == 'joint':
+            input_list.append(parent.short_name())
         _get_list_of_parents(parent, input_list)
         
     else:
@@ -372,15 +419,22 @@ def _get_joint_entry(hik_key, joint_struct = None, joint=None):
     parent_list = []
     _get_list_of_parents(joint, parent_list)
     
-    joint_struct['Joint name'] = joint.name().lstrip('|')
+    joint_struct['Joint name'] = joint.short_name()
     joint_struct['Joint path'] = parent_list
     return joint_struct
     
 
 def _get_section(section_name, keys, twist_data = False, user_data=None):
     names_list = []
-    #This should always exist
-    hik_properties = _ACTIVE_CHARACTER_NODE.propertyState.get()
+    # This connection should always exist on a valid HIK character.
+    property_nodes = _ACTIVE_CHARACTER_NODE.propertyState.inputs()
+    if not property_nodes:
+        raise RuntimeError(
+            "HIK character {!r} has no property state".format(
+                _ACTIVE_CHARACTER_NODE.name()
+            )
+        )
+    hik_properties = property_nodes[0]
     
     for key in keys:
         joint_struct = _get_joint_entry(key)
@@ -540,39 +594,15 @@ def get_qrig_struct(user_data = None):
     
     twists_title = {
         'Title' : 'Twist bones',
-        'Sections' :  [
-            _get_section('Left arm',
-                         ['LeafLeftArmRoll1', 'LeafLeftArmRoll2',
-                          'LeafLeftArmRoll3', 'LeafLeftArmRoll4',
-                          'LeafLeftArmRoll5',
-                          'LeafLeftForeArmRoll1', 'LeafLeftForeArmRoll2',
-                          'LeafLeftForeArmRoll3', 'LeafLeftForeArmRoll4',
-                          'LeafLeftForeArmRoll5'],
-                         twist_data=True, user_data=user_data),
-            
-            _get_section('Right arm', ['LeafRightArmRoll1', 'LeafRightArmRoll2',
-                          'LeafRightArmRoll3', 'LeafRightArmRoll4',
-                          'LeafRightArmRoll5',
-                          'LeafRightForeArmRoll1', 'LeafRightForeArmRoll2',
-                          'LeafRightForeArmRoll3', 'LeafRightForeArmRoll4',
-                          'LeafRightForeArmRoll5'],
-                         twist_data=True, user_data=user_data),
-            
-            _get_section('Left leg', ['LeafLeftUpLegRoll1', 'LeafLeftUpLegRoll2',
-                          'LeafLeftUpLegRoll3', 'LeafLeftUpLegRoll4',
-                          'LeafLeftUpLegRoll5',
-                          'LeafLeftLegRoll1', 'LeafLeftLegRoll2',
-                          'LeafLeftLegRoll3', 'LeafLeftLegRoll4',
-                          'LeafLeftLegRoll5'],
-                         twist_data=True, user_data=user_data),
-            _get_section('Right leg', ['LeafRightUpLegRoll1', 'LeafRightUpLegRoll2',
-                          'LeafRightUpLegRoll3', 'LeafRightUpLegRoll4',
-                          'LeafRightUpLegRoll5',
-                          'LeafRightLegRoll1', 'LeafRightLegRoll2',
-                          'LeafRightLegRoll3', 'LeafRightLegRoll4',
-                          'LeafRightLegRoll5'],
-                         twist_data=True, user_data=user_data),
-            ]
+        'Sections' : [
+            _get_section(
+                section_name,
+                keys,
+                twist_data=True,
+                user_data=user_data,
+            )
+            for section_name, keys in TWIST_SECTIONS
+        ]
     } 
     
     root = {}
@@ -602,6 +632,273 @@ def export_qrig_file(character_node, qrig_data, filename):
     f.close()
 
     return filename
+
+
+def _leaf_name(name):
+    return str(name).replace('\\', '|').rsplit('|', 1)[-1]
+
+
+def _without_namespace(name):
+    return _leaf_name(name).rsplit(':', 1)[-1]
+
+
+def _qrt_entries(document):
+    for title in document.get('Document', []):
+        title_name = title.get('Title', '')
+        for section in title.get('Sections', []):
+            for entry in section.get('Names', []):
+                yield title_name, section.get('Section', ''), entry
+
+
+def _qrt_hik_entries(document):
+    """Map QRT bone semantics, including twist order, to Maya HIK slots."""
+    reverse = {}
+    twist_slots = {}
+    for hik_name, qrt_name in HIK_ATTRS.items():
+        if not qrt_name:
+            continue
+        if hik_name.startswith('Leaf'):
+            twist_slots.setdefault(qrt_name, []).append(hik_name)
+        else:
+            reverse.setdefault(qrt_name, hik_name)
+
+    result = {}
+    twist_indices = {}
+    for title, unused_section, entry in _qrt_entries(document):
+        qrt_name = entry.get('Bone name')
+        if title.lower() == 'twist bones':
+            index = twist_indices.get(qrt_name, 0)
+            candidates = twist_slots.get(qrt_name, [])
+            if index < len(candidates) and entry.get('Joint name'):
+                result[candidates[index]] = entry
+                twist_indices[qrt_name] = index + 1
+            continue
+        hik_name = reverse.get(qrt_name)
+        if hik_name and entry.get('Joint name'):
+            result[hik_name] = entry
+    return result
+
+
+def _qrt_qrig_entries(document):
+    """Return QRT entries that configure Maya-only QRigData joint options."""
+    semantics = {
+        'chest': 'chestJoint',
+        'weapon_l': 'leftWeapon',
+        'weapon_r': 'rightWeapon',
+    }
+    result = {}
+    for unused_title, unused_section, entry in _qrt_entries(document):
+        attr_name = semantics.get(entry.get('Bone name'))
+        if attr_name and entry.get('Joint name'):
+            result.setdefault(attr_name, entry)
+    return result
+
+
+def _match_imported_joint(entry, joint_names):
+    """Resolve a QRT joint entry against FBX-imported Maya DAG paths."""
+    target = str(entry.get('Joint name', ''))
+    if not target:
+        return None
+    target_leaf = _leaf_name(target)
+    target_base = _without_namespace(target)
+    target_path = [_without_namespace(item) for item in entry.get('Joint path', [])]
+
+    scored = []
+    for candidate in joint_names:
+        candidate = str(candidate)
+        leaf = _leaf_name(candidate)
+        base = _without_namespace(candidate)
+        segments = [_without_namespace(item) for item in candidate.split('|') if item]
+        score = 0
+        if candidate.lstrip('|') == target.lstrip('|'):
+            score += 100
+        if leaf == target_leaf:
+            score += 50
+        if base == target_base:
+            score += 25
+        if target_path:
+            parent_segments = segments[:-1]
+            suffix = min(len(parent_segments), len(target_path))
+            while suffix and parent_segments[-suffix:] != target_path[-suffix:]:
+                suffix -= 1
+            score += suffix
+        if score:
+            scored.append((score, candidate))
+    if not scored:
+        return None
+    best_score = max(score for score, unused_candidate in scored)
+    matches = sorted(candidate for score, candidate in scored if score == best_score)
+    return matches[0] if len(matches) == 1 else None
+
+
+def _ordered_spine_chain(chain, hips, neck, head):
+    """Keep the torso portion of a SplineIK chain in Maya hierarchy order."""
+    from maya import cmds
+
+    chain = list(dict.fromkeys(chain))
+    if len(chain) < 2:
+        return []
+
+    def depth(node):
+        return len([item for item in str(node).split('|') if item])
+
+    chain.sort(key=depth)
+    excluded = {item for item in (hips, neck, head) if item}
+    chain = [item for item in chain if item not in excluded]
+    if len(chain) < 2:
+        return []
+
+    # UUID-backed long names normally make depth sufficient. If an FBX loader
+    # returned short names, walk parent links to preserve the actual chain.
+    result = [chain[0]]
+    remaining = set(chain[1:])
+    while remaining:
+        child = next(
+            (
+                item
+                for item in remaining
+                if (cmds.listRelatives(item, parent=True, fullPath=True) or [None])[0]
+                == result[-1]
+            ),
+            None,
+        )
+        if child is None:
+            result.extend(sorted(remaining, key=depth))
+            break
+        result.append(child)
+        remaining.remove(child)
+    return result
+
+
+def _apply_spline_ik(mapping, metadata, joint_names):
+    """Replace the basic stomach/chest mapping with every SplineIK spine joint."""
+    if not metadata:
+        return mapping
+    start = mapping.get('Spine')
+    end = mapping.get('Spine1')
+    if not start or not end:
+        return mapping
+
+    chosen = []
+    for names in metadata.get('spline_ik_chains', []):
+        resolved = [
+            _match_imported_joint({'Joint name': name}, joint_names)
+            for name in names
+        ]
+        resolved = [item for item in resolved if item]
+        if start in resolved and end in resolved:
+            chosen = resolved
+            break
+    if not chosen:
+        return mapping
+
+    chosen = _ordered_spine_chain(
+        chosen,
+        mapping.get('Hips'),
+        mapping.get('Neck'),
+        mapping.get('Head'),
+    )
+    if not chosen:
+        return mapping
+
+    for key in ['Spine'] + ['Spine{}'.format(index) for index in range(1, 10)]:
+        mapping.pop(key, None)
+    for index, joint in enumerate(chosen[:10]):
+        mapping['Spine' if index == 0 else 'Spine{}'.format(index)] = joint
+    return mapping
+
+
+def import_qrig_character(qrig_path, hikmap_path, joint_names, export_node):
+    """Create and connect an HIK definition from Cascadeur's QRT metadata."""
+    from maya import cmds, mel
+    from cg3dguru.maya import Node
+    from . import hik
+    from .udata import QRigData
+
+    with open(qrig_path, encoding='utf-8') as qrig_file:
+        document = json.load(qrig_file)
+    metadata = {}
+    if hikmap_path:
+        with open(hikmap_path, encoding='utf-8') as mapping_file:
+            metadata = json.load(mapping_file)
+
+    mapping = {}
+    for hik_name, entry in _qrt_hik_entries(document).items():
+        joint = _match_imported_joint(entry, joint_names)
+        if joint:
+            mapping[hik_name] = joint
+    qrig_joints = {}
+    for attr_name, entry in _qrt_qrig_entries(document).items():
+        joint = _match_imported_joint(entry, joint_names)
+        if joint:
+            qrig_joints[attr_name] = joint
+    mapping = _apply_spline_ik(mapping, metadata, joint_names)
+    if not mapping:
+        cmds.error("Cascadeur QRT data did not match any imported joints.")
+
+    qrig_data = QRigData.get_data(export_node)
+    existing_characters = qrig_data.characterNode.inputs() if qrig_data else []
+    if len(existing_characters) > 1:
+        cmds.error("Cascadeur export data is connected to multiple HIK characters.")
+
+    hik.load_hik()
+    if existing_characters:
+        character = existing_characters[0].name()
+    else:
+        previous = set(cmds.ls(type='HIKCharacterNode') or [])
+        mel.eval('hikCreateDefinition')
+        created = [
+            node
+            for node in (cmds.ls(type='HIKCharacterNode') or [])
+            if node not in previous
+        ]
+        if len(created) != 1:
+            cmds.error("Failed to create an HIK character definition for Cascadeur data.")
+        character = created[0]
+
+    indices = hik.get_node_index_mapping()
+    for hik_name, joint in mapping.items():
+        index = indices.get(hik_name)
+        if index is None:
+            continue
+        current = cmds.listConnections(
+            '{}.{}'.format(character, hik_name),
+            source=True,
+            destination=False,
+            type='joint',
+        ) or []
+        if joint in (cmds.ls(current, long=True) or []):
+            continue
+        safe_joint = joint.replace('"', '\\"')
+        safe_character = character.replace('"', '\\"')
+        mel.eval(
+            'setCharacterObject("{}", "{}", {}, 0)'.format(
+                safe_joint, safe_character, index
+            )
+        )
+
+    if qrig_data is None:
+        qrig_data = QRigData.add_data(export_node)
+    if not qrig_data.characterNode.inputs():
+        Node(character).message.connect(qrig_data.characterNode, force=True)
+
+    # The semantic QRT chest can intentionally differ from the final HIK
+    # spine slot (Manny uses spine4 even though its SplineIK chain continues).
+    # Retain the old endpoint fallback for QRT documents without a chest entry.
+    if 'chestJoint' not in qrig_joints:
+        spine_names = ['Spine'] + [
+            'Spine{}'.format(index) for index in range(1, 10)
+        ]
+        spine_joints = [mapping[name] for name in spine_names if name in mapping]
+        if spine_joints:
+            qrig_joints['chestJoint'] = spine_joints[-1]
+
+    for attr_name, joint in qrig_joints.items():
+        joint_node = Node(joint)
+        target = qrig_data.attr(attr_name)
+        if target.inputs() != [joint_node]:
+            joint_node.message.connect(target, force=True)
+    return Node(character)
 
 
 def get_skinned_meshes(character_node):

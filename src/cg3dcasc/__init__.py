@@ -1,8 +1,7 @@
 from .core import *
 from . import preferences
-#from .core import hik
 
-VERSION = (1, 6, 3)
+VERSION = (2, 0, 0)
 
 __author__ = "Nathaniel Albright"
 __email__ = "developer@3dcg.guru"
